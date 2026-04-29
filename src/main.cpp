@@ -135,8 +135,6 @@ int main(int argc, char *argv[])
     double simulation_time = 5.0;
     double setpoint = 1.0;
 
-    LOG_INFO(&logger, "Starting simulation");
-
     /*===========================================================================*
      * System setup
      *===========================================================================*/
@@ -147,25 +145,67 @@ int main(int argc, char *argv[])
     double y = 0.0;
 
     /*===========================================================================*
-     * Start streaming plot
+     * Buffers (sliding window) for plotting
      *===========================================================================*/
-    fprintf(gp, "plot '-' using 1:2 with lines title 'Setpoint', "
-                "'-' using 1:2 with lines title 'Output'\n");
+    std::vector<double> time;
+    std::vector<double> output;
+    std::vector<double> sp;
+
+    const size_t MAX_POINTS = 500;
+
+    // /*===========================================================================*
+    //  * Start streaming plot
+    //  *===========================================================================*/
+    // fprintf(gp, "plot '-' using 1:2 with lines title 'Setpoint', "
+    //             "'-' using 1:2 with lines title 'Output'\n");
 
     /*===========================================================================*
      * Simulation loop
      *===========================================================================*/                
-    for (double t = 0.0; t <= simulation_time; t += dt) {
-        
+    for (double t = 0.0; t <= simulation_time; t += dt) 
+    {
+        /*===========================================================================*
+         * Compute control signal and update plant 
+         *===========================================================================*/  
         double u = pid.compute(setpoint, y, dt);
         y = plant.update(u, dt);
 
-        // Stream setpoint
-        fprintf(gp, "%f %f\n", t, setpoint);
+        /*===========================================================================*
+         * Plotting
+         *===========================================================================*/
+        // Update buffers for plotting
+        time.push_back(t);
+        output.push_back(y);
+        sp.push_back(setpoint);
 
-        // Stream output
-        fprintf(gp, "%f %f\n", t, y);
+        // Keep only the latest MAX_POINTS for plotting
+        if (time.size() > MAX_POINTS)
+        {
+            time.erase(time.begin());
+            output.erase(output.begin());
+            sp.erase(sp.begin());
+        }
 
+        // Send data to gnuplot
+        fprintf(gp,
+            "plot '-' using 1:2 with lines title 'Setpoint', "
+            "'-' using 1:2 with lines title 'Output'\n");
+
+        // Setpoint
+        for (size_t i = 0; i < time.size(); ++i)
+            fprintf(gp, "%f %f\n", time[i], sp[i]);
+        fprintf(gp, "e\n");
+
+        // Output
+        for (size_t i = 0; i < time.size(); ++i)
+            fprintf(gp, "%f %f\n", time[i], output[i]);
+        fprintf(gp, "e\n");
+
+        fflush(gp);
+
+        /*===========================================================================*
+         * Logging
+         *===========================================================================*/
         // CSV output
         LOG_INFO(&logger,
             std::to_string(t) + "," +
@@ -181,17 +221,13 @@ int main(int argc, char *argv[])
             " u=" + std::to_string(u)
         );
 
+        // Sleep for a short time to simulate real-time and allow gnuplot to update
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
     }
-    
-    LOG_INFO(&logger, "Simulation finished");
 
     /*===========================================================================*
      * Gnuplot cleanup
      *===========================================================================*/
-    fprintf(gp, "e\n"); // end dataset
-    fflush(gp);
     pclose(gp);
 
     std::cout << "===  End  ===" << std::endl;
