@@ -95,6 +95,28 @@ int main(int argc, char *argv[])
     (void)argc;
     (void)argv;
 
+    std::cout << "=== Start ===" << std::endl;
+
+    /*===========================================================================*
+     * Gnuplot setup
+     *===========================================================================*/
+    // Open a pipe to gnuplot
+    FILE* gp = popen("gnuplot -persistent", "w");
+    if (!gp)
+    {
+        printf("Error: could not open gnuplot\n");
+        return -1;
+    }
+
+    // Gnuplot initial configuration
+    fprintf(gp, "set title 'PID Real-Time Response'\n");
+    fprintf(gp, "set xlabel 'Time'\n");
+    fprintf(gp, "set ylabel 'Value'\n");
+    fprintf(gp, "set grid\n");
+
+    /*===========================================================================*
+     * Logging setup
+     *===========================================================================*/
     Logger logger;
     LoggerStdoutSink consoleLogger;
     LoggerFileSink fileLogger("output.csv", LogLevel::Info);
@@ -102,31 +124,47 @@ int main(int argc, char *argv[])
     logger.setLevel(LogLevel::Debug);
     logger.addSink(&consoleLogger);
     logger.addSink(&fileLogger);
+    
+    // Header CSV output
+    LOG_INFO(&logger, "time,setpoint,output,control_signal");
 
-    std::cout << "=== Start ===" << std::endl;
-
-    LOG_INFO(&logger, "Starting simulation");
-
-    // Plant: K=1, tau=1
-    // FirstOrderPlant plant(1.0, 1.0);
-
-    SecondOrderPlant plant(1.0, 4.0, 0.3);
-
-    // PID: tweak these later
-    PIDController pid(2.0, 1.0, 0.1, -10, 10);
-
+    /*===========================================================================*
+     * Simulation parameters
+     *===========================================================================*/
     double dt = 0.01;
     double simulation_time = 5.0;
     double setpoint = 1.0;
 
+    LOG_INFO(&logger, "Starting simulation");
+
+    /*===========================================================================*
+     * System setup
+     *===========================================================================*/
+    // FirstOrderPlant plant(1.0, 1.0);         // Plant: K=1, tau=1
+    SecondOrderPlant plant(1.0, 4.0, 0.3);      // Plant: K=1, omega_n=4, psi=0.3 (underdamped)
+    PIDController pid(2.0, 1.0, 0.1, -10, 10);  // PID: Kp=2, Ki=1, Kd=0.1, u_min=-10, u_max=10
+
     double y = 0.0;
 
-    // Header CSV output
-    LOG_INFO(&logger, "time,setpoint,output,control_signal");
+    /*===========================================================================*
+     * Start streaming plot
+     *===========================================================================*/
+    fprintf(gp, "plot '-' using 1:2 with lines title 'Setpoint', "
+                "'-' using 1:2 with lines title 'Output'\n");
 
+    /*===========================================================================*
+     * Simulation loop
+     *===========================================================================*/                
     for (double t = 0.0; t <= simulation_time; t += dt) {
+        
         double u = pid.compute(setpoint, y, dt);
         y = plant.update(u, dt);
+
+        // Stream setpoint
+        fprintf(gp, "%f %f\n", t, setpoint);
+
+        // Stream output
+        fprintf(gp, "%f %f\n", t, y);
 
         // CSV output
         LOG_INFO(&logger,
@@ -143,11 +181,18 @@ int main(int argc, char *argv[])
             " u=" + std::to_string(u)
         );
 
-    }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
+    }
+    
     LOG_INFO(&logger, "Simulation finished");
 
-    std::system("gnuplot -persist -e \"filename='output.csv'\" tools/plot.gp");
+    /*===========================================================================*
+     * Gnuplot cleanup
+     *===========================================================================*/
+    fprintf(gp, "e\n"); // end dataset
+    fflush(gp);
+    pclose(gp);
 
     std::cout << "===  End  ===" << std::endl;
 
