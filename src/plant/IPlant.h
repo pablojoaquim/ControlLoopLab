@@ -6,3 +6,4 @@ public:
     virtual double update(double input, double dt) = 0;
     virtual void reset() = 0;
 };
+

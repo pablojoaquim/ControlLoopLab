@@ -39,6 +39,7 @@
 #include <chrono>
 #include "katas.h"
 #include "FirstOrderPlant.h"
+#include "SecondOrderPlant.h"
 #include "PIDController.h"
 
 /*===========================================================================*
@@ -91,7 +92,9 @@ int main(int argc, char *argv[])
 
     std::cout << "=== Start ===" << std::endl;
     // Plant: K=1, tau=1
-    FirstOrderPlant plant(1.0, 1.0);
+    // FirstOrderPlant plant(1.0, 1.0);
+
+    SecondOrderPlant plant(1.0, 4.0, 0.3);
 
     // PID: tweak these later
     PIDController pid(2.0, 1.0, 0.1, -10, 10);
