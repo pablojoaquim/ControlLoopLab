@@ -94,7 +94,7 @@ static const char* levelToStr(LogLevel lvl)
  * Name         write
  * Description  write message implementation to the stdout as the logging output
  *****************************************************************************/
-void StdoutSink::write(const LogRecord& r) noexcept
+void LoggerStdoutSink::write(const LogRecord& r) noexcept
 {
     const char* color = levelColor(r.level);
     const char* reset = "\033[0m";

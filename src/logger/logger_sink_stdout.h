@@ -60,7 +60,7 @@
 // @todo: Add C++ class declarations here.
 
 // Interface implementatin to decouple the logging output, in this case using the stdout
-class StdoutSink : public ILogSink
+class LoggerStdoutSink : public ILogSink
 {
 public:
     void write(const LogRecord& r) noexcept;

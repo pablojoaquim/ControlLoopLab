@@ -96,26 +96,17 @@ int main(int argc, char *argv[])
     (void)argv;
 
     Logger logger;
-
-    StdoutSink console;
-    FileSink file("output.csv", LogLevel::Info);
+    LoggerStdoutSink consoleLogger;
+    LoggerFileSink fileLogger("output.csv", LogLevel::Info);
 
     logger.setLevel(LogLevel::Debug);
-    logger.addSink(&console);
-    logger.addSink(&file);
-    g_logger = &logger;
+    logger.addSink(&consoleLogger);
+    logger.addSink(&fileLogger);
 
-    file.writeHeader("time,setpoint,output,control_signal");
+    std::cout << "=== Start ===" << std::endl;
 
-    // std::ofstream log("output.csv");
+    LOG_INFO(&logger, "Starting simulation");
 
-    // if(!log.is_open()) {
-    //     std::cerr << "Error opening output.csv for writing!" << std::endl;
-    //     return -1;
-    // }
-
-    // std::cout << "=== Start ===" << std::endl;
-    LOG_INFO("Starting simulation");
     // Plant: K=1, tau=1
     // FirstOrderPlant plant(1.0, 1.0);
 
@@ -130,23 +121,23 @@ int main(int argc, char *argv[])
 
     double y = 0.0;
 
-    // Header CSV
-    // log->info("time,setpoint,output,control_signal");
+    // Header CSV output
+    LOG_INFO(&logger, "time,setpoint,output,control_signal");
 
     for (double t = 0.0; t <= simulation_time; t += dt) {
         double u = pid.compute(setpoint, y, dt);
         y = plant.update(u, dt);
 
         // CSV output
-        LOG_INFO(
+        LOG_INFO(&logger,
             std::to_string(t) + "," +
             std::to_string(setpoint) + "," +
             std::to_string(y) + "," +
             std::to_string(u)
         );
 
-        // Debug (solo consola)
-        LOG_DEBUG(
+        // Debug output
+        LOG_DEBUG(&logger,
             "t=" + std::to_string(t) +
             " y=" + std::to_string(y) +
             " u=" + std::to_string(u)
@@ -154,10 +145,11 @@ int main(int argc, char *argv[])
 
     }
 
-    // std::cout << "===  End  ===" << std::endl;
-    LOG_INFO("Simulation finished");
+    LOG_INFO(&logger, "Simulation finished");
 
     std::system("gnuplot -persist -e \"filename='output.csv'\" tools/plot.gp");
+
+    std::cout << "===  End  ===" << std::endl;
 
     return 0;
 }

@@ -37,10 +37,10 @@
  *===========================================================================*/
 
 /*****************************************************************************
- * Name         FileSink::FileSink
+ * Name         LoggerFileSink::LoggerFileSink
  * Description  Constructor - opens file
  *****************************************************************************/
-FileSink::FileSink(const std::string& filename,
+LoggerFileSink::LoggerFileSink(const std::string& filename,
                    LogLevel minLevel)
     : file_(filename),
       minLevel_(minLevel)
@@ -52,9 +52,9 @@ FileSink::FileSink(const std::string& filename,
 }
 
 /*****************************************************************************
- * Name         FileSink::~FileSink
+ * Name         LoggerFileSink::~LoggerFileSink
  *****************************************************************************/
-FileSink::~FileSink()
+LoggerFileSink::~LoggerFileSink()
 {
     if (file_.is_open())
     {
@@ -64,21 +64,10 @@ FileSink::~FileSink()
 }
 
 /*****************************************************************************
- * Name         FileSink::writeHeader
- *****************************************************************************/
-void FileSink::writeHeader(const std::string& header)
-{
-    if (file_.is_open())
-    {
-        file_ << header << "\n";
-    }
-}
-
-/*****************************************************************************
- * Name         FileSink::write
+ * Name         LoggerFileSink::write
  * Description  Write log record to file
  *****************************************************************************/
-void FileSink::write(const LogRecord& record) noexcept
+void LoggerFileSink::write(const LogRecord& record) noexcept
 {
     if (!file_.is_open())
         return;
@@ -86,6 +75,5 @@ void FileSink::write(const LogRecord& record) noexcept
     if (record.level < minLevel_)
         return;
 
-    // CSV limpio: solo mensaje
     file_ << record.message << "\n";
 }

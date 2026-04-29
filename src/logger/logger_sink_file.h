@@ -44,17 +44,15 @@
  *===========================================================================*/
 #ifdef __cplusplus
 
-class FileSink : public ILogSink
+class LoggerFileSink : public ILogSink
 {
 public:
-    explicit FileSink(const std::string& filename,
+    explicit LoggerFileSink(const std::string& filename,
                       LogLevel minLevel = LogLevel::Info);
 
-    ~FileSink();
+    ~LoggerFileSink();
 
     void write(const LogRecord& record) noexcept override;
-
-    void writeHeader(const std::string& header);
 
 private:
     std::ofstream file_;

@@ -1,5 +1,5 @@
-time,setpoint,output,control_signal
 Starting simulation
+time,setpoint,output,control_signal
 0.000000,1.000000,0.000000,10.000000
 0.010000,1.000000,0.016000,2.010000
 0.020000,1.000000,0.034832,1.827840

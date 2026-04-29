@@ -50,17 +50,17 @@
 /*===========================================================================*
  * Exported Preprocessor #define MACROS
  *===========================================================================*/
-#define LOG_DEBUG(msg) \
-    if(g_logger) g_logger->debug(msg, __FILE__, __LINE__, __func__)
+#define LOG_DEBUG(_logger, msg) \
+    do { if((_logger)) (_logger)->debug(msg, __FILE__, __LINE__, __func__); } while(0)
 
-#define LOG_INFO(msg) \
-    if(g_logger) g_logger->info(msg, __FILE__, __LINE__, __func__)
+#define LOG_INFO(_logger, msg) \
+    do { if((_logger)) (_logger)->info(msg, __FILE__, __LINE__, __func__); } while(0)
 
-#define LOG_WARN(msg) \
-    if(g_logger) g_logger->warn(msg, __FILE__, __LINE__, __func__)
+#define LOG_WARN(_logger, msg) \
+    do { if((_logger)) (_logger)->warn(msg, __FILE__, __LINE__, __func__); } while(0)
 
-#define LOG_ERROR(msg) \
-    if(g_logger) g_logger->error(msg, __FILE__, __LINE__, __func__)
+#define LOG_ERROR(_logger, msg) \
+    do { if((_logger)) (_logger)->error(msg, __FILE__, __LINE__, __func__); } while(0)
 
 /*===========================================================================*
  * Exported Type Declarations
@@ -124,9 +124,6 @@ extern "C"
 /*===========================================================================*
  * Exported C++ Globals
  *===========================================================================*/
-#ifdef __cplusplus
-extern Logger* g_logger;
-#endif
 
 /*===========================================================================*/
 /*===========================================================================*/
