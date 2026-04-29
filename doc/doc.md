@@ -1,1 +1,0 @@
-Add the documentation of the project in this folder.
