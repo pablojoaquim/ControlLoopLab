@@ -3,7 +3,8 @@
 
 class PIDController : public IController {
 public:
-    PIDController(double kp, double ki, double kd);
+    PIDController(double kp, double ki, double kd,
+                  double u_min, double u_max);
 
     double compute(double setpoint, double measurement, double dt) override;
     void reset() override;
@@ -13,6 +14,9 @@ private:
     double ki_;
     double kd_;
 
-    double integral_;
+    double u_min_;
+    double u_max_;
+
+    double cumulative_error_;
     double prev_error_;
 };
