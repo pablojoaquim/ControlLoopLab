@@ -37,6 +37,8 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <cstdlib>
+
 #include "katas.h"
 #include "FirstOrderPlant.h"
 #include "SecondOrderPlant.h"
@@ -105,6 +107,8 @@ int main(int argc, char *argv[])
 
     double y = 0.0;
 
+    std::cout << "time,setpoint,output,control_signal" << std::endl;
+
     for (double t = 0.0; t <= simulation_time; t += dt) {
         double u = pid.compute(setpoint, y, dt);
         y = plant.update(u, dt);
@@ -112,7 +116,9 @@ int main(int argc, char *argv[])
         std::cout << t << "," << setpoint << "," << y << "," << u << std::endl;
     }
 
-    return 0;
     std::cout << "===  End  ===" << std::endl;
+
+    std::system("gnuplot -persist -e \"filename='output.csv'\" tools/plot.gp");
+
     return 0;
 }
