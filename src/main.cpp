@@ -88,6 +88,42 @@ extern "C"
 }
 
 /*****************************************************************************
+ * @fn         drawControlPanel
+ * @brief      Draw the control panel in the terminal
+ * @param [in] kp, ki, kd - PID parameters
+ * @param [in] setpoint - current setpoint
+ * @param [in] paused - whether the simulation is paused
+ * @return     void
+ *****************************************************************************/
+void drawControlPanel(double kp, double ki, double kd,
+                      double setpoint, bool paused)
+{
+    // Limpiar pantalla y mover cursor arriba
+    std::cout << "\033[2J\033[H";
+
+    std::cout << "=== PID CONTROL PANEL ===\n\n";
+
+    std::cout << "Kp: " << kp << "   (w/s)\n";
+    std::cout << "Ki: " << ki << "   (e/d)\n";
+    std::cout << "Kd: " << kd << "   (r/f)\n\n";
+
+    std::cout << "Setpoint: " << setpoint << "   (t/g)\n\n";
+
+    std::cout << "Controls:\n";
+    std::cout << "  w/s -> Kp +/-\n";
+    std::cout << "  e/d -> Ki +/-\n";
+    std::cout << "  r/f -> Kd +/-\n";
+    std::cout << "  t/g -> Setpoint +/-\n";
+    std::cout << "  p   -> Pause\n";
+    std::cout << "  c   -> Continue\n";
+    std::cout << "  x   -> Reset PID\n";
+    std::cout << "  q   -> Quit\n\n";
+
+    std::cout << "Status: " << (paused ? "PAUSED" : "RUNNING") << "\n";
+}
+
+
+/*****************************************************************************
  * @fn         main
  * @brief      The main entry point
  * @param [in] void
@@ -148,6 +184,7 @@ int main(int argc, char *argv[])
     
     char key = '\0';
     bool exit_requested = false;
+    bool paused = false;
 
     /*===========================================================================*
      * Simulation parameters
@@ -184,7 +221,8 @@ int main(int argc, char *argv[])
     {
         /*===========================================================================*
          * Handle user input to adjust PID parameters and setpoint
-         *===========================================================================*/  
+         *===========================================================================*/
+        drawControlPanel(kp, ki, kd, setpoint, paused);  
         while (read(STDIN_FILENO, &key, 1) > 0)
         {
             if(key != '\0')
@@ -199,6 +237,9 @@ int main(int argc, char *argv[])
                     case 'f': kd -= 0.01; break;
                     case 't': setpoint += 0.5; break;
                     case 'g': setpoint -= 0.5; break;
+                    case 'p': paused = true; break;
+                    case 'c': paused = false; break;
+                    case 'x': pid.reset(); break;
                     case 'q': exit_requested = true; break;
                 }
 
@@ -212,63 +253,68 @@ int main(int argc, char *argv[])
                 key = '\0';
             }
         }
-                
-        /*===========================================================================*
-         * Compute control signal and update plant 
-         *===========================================================================*/  
-        double u = pid.compute(setpoint, y, dt);
-        y = plant.update(u, dt);
+        
+            /*===========================================================================*
+            * Compute control signal and update plant 
+            *===========================================================================*/
+           double u = 0.0;  
+            if(!paused)
+            {
+                u = pid.compute(setpoint, y, dt);
+                y = plant.update(u, dt);
+            }
 
-        /*===========================================================================*
-         * Plotting
-         *===========================================================================*/
-        // Update buffers for plotting
-        time.push_back(t);
-        output.push_back(y);
-        sp.push_back(setpoint);
+            /*===========================================================================*
+            * Plotting
+            *===========================================================================*/
+            // Update buffers for plotting
+            time.push_back(t);
+            output.push_back(y);
+            sp.push_back(setpoint);
 
-        // Keep only the latest MAX_POINTS for plotting
-        if (time.size() > MAX_POINTS)
-        {
-            time.erase(time.begin());
-            output.erase(output.begin());
-            sp.erase(sp.begin());
-        }
+            // Keep only the latest MAX_POINTS for plotting
+            if (time.size() > MAX_POINTS)
+            {
+                time.erase(time.begin());
+                output.erase(output.begin());
+                sp.erase(sp.begin());
+            }
 
-        // Send data to gnuplot
-        fprintf(gp,
-            "plot '-' using 1:2 with lines title 'Setpoint', "
-            "'-' using 1:2 with lines title 'Output'\n");
+            // Send data to gnuplot
+            fprintf(gp,
+                "plot '-' using 1:2 with lines title 'Setpoint', "
+                "'-' using 1:2 with lines title 'Output'\n");
 
-        // Setpoint
-        for (size_t i = 0; i < time.size(); ++i)
-            fprintf(gp, "%f %f\n", time[i], sp[i]);
-        fprintf(gp, "e\n");
+            // Setpoint
+            for (size_t i = 0; i < time.size(); ++i)
+                fprintf(gp, "%f %f\n", time[i], sp[i]);
+            fprintf(gp, "e\n");
 
-        // Output
-        for (size_t i = 0; i < time.size(); ++i)
-            fprintf(gp, "%f %f\n", time[i], output[i]);
-        fprintf(gp, "e\n");
+            // Output
+            for (size_t i = 0; i < time.size(); ++i)
+                fprintf(gp, "%f %f\n", time[i], output[i]);
+            fprintf(gp, "e\n");
 
-        fflush(gp);
+            fflush(gp);
 
-        /*===========================================================================*
-         * Logging
-         *===========================================================================*/
-        // CSV output
-        LOG_INFO(&logger,
-            std::to_string(t) + "," +
-            std::to_string(setpoint) + "," +
-            std::to_string(y) + "," +
-            std::to_string(u)
-        );
+            /*===========================================================================*
+            * Logging
+            *===========================================================================*/
+            // CSV output
+            LOG_INFO(&logger,
+                std::to_string(t) + "," +
+                std::to_string(setpoint) + "," +
+                std::to_string(y) + "," +
+                std::to_string(u)
+            );
 
-        // Debug output
-        LOG_DEBUG(&logger,
-            "t=" + std::to_string(t) +
-            " y=" + std::to_string(y) +
-            " u=" + std::to_string(u)
-        );
+            // Debug output
+            LOG_DEBUG(&logger,
+                "t=" + std::to_string(t) +
+                " y=" + std::to_string(y) +
+                " u=" + std::to_string(u)
+            );
+
 
         // Sleep for a short time to simulate real-time and allow gnuplot to update
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
