@@ -38,6 +38,8 @@
 #include <thread>
 #include <chrono>
 #include "katas.h"
+#include "FirstOrderPlant.h"
+#include "PIDController.h"
 
 /*===========================================================================*
  * Local Preprocessor #define Constants
@@ -88,7 +90,26 @@ int main(int argc, char *argv[])
     (void)argv;
 
     std::cout << "=== Start ===" << std::endl;
+    // Plant: K=1, tau=1
+    FirstOrderPlant plant(1.0, 1.0);
 
+    // PID: tweak these later
+    PIDController pid(2.0, 1.0, 0.1);
+
+    double dt = 0.01;
+    double simulation_time = 5.0;
+    double setpoint = 1.0;
+
+    double y = 0.0;
+
+    for (double t = 0.0; t <= simulation_time; t += dt) {
+        double u = pid.compute(setpoint, y, dt);
+        y = plant.update(u, dt);
+
+        std::cout << t << "," << setpoint << "," << y << "," << u << std::endl;
+    }
+
+    return 0;
     std::cout << "===  End  ===" << std::endl;
     return 0;
 }
