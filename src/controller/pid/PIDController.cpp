@@ -7,7 +7,8 @@ PIDController::PIDController(double kp, double ki, double kd,
       u_min_(u_min), u_max_(u_max),
       cumulative_error_(0.0), prev_error_(0.0) {}
 
-double PIDController::compute(double setpoint, double measurement, double dt) {
+double PIDController::compute(double setpoint, double measurement, double dt)
+{
     double error = setpoint - measurement;
 
     // Derivative (rate of error change)
@@ -29,7 +30,8 @@ double PIDController::compute(double setpoint, double measurement, double dt) {
     double u_sat = std::clamp(u, u_min_, u_max_);
 
     // Anti-windup: only integrate if not saturating
-    if (u == u_sat) {
+    if (u == u_sat)
+    {
         cumulative_error_ = i;
     }
 
@@ -38,7 +40,31 @@ double PIDController::compute(double setpoint, double measurement, double dt) {
     return u_sat;
 }
 
-void PIDController::reset() {
+void PIDController::reset()
+{
     cumulative_error_ = 0.0;
     prev_error_ = 0.0;
 }
+
+void PIDController::setKp(double kp)
+{
+    kp_ = kp;
+}
+
+void PIDController::setKi(double ki)
+{
+    if (ki_ != 0.0)
+    {
+        cumulative_error_ *= (ki_ / ki); // Scale cumulative error to maintain the same integral contribution
+    }
+    ki_ = ki;
+}
+
+void PIDController::setKd(double kd)
+{
+    kd_ = kd;
+}
+
+double PIDController::getKp() const { return kp_; }
+double PIDController::getKi() const { return ki_; }
+double PIDController::getKd() const { return kd_; }

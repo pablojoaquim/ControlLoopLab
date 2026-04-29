@@ -9,6 +9,14 @@ public:
     double compute(double setpoint, double measurement, double dt) override;
     void reset() override;
 
+    void setKp(double kp);
+    void setKi(double ki);
+    void setKd(double kd);
+
+    double getKp() const;
+    double getKi() const;
+    double getKd() const;
+
 private:
     double kp_;
     double ki_;
