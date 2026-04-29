@@ -1,0 +1,117 @@
+/*===========================================================================*/
+/**
+ * @file queue_example.c
+ *
+ *------------------------------------------------------------------------------
+ *
+ * @section DESC DESCRIPTION:
+ * Example on how to use the Queue module
+ *
+ * @section ABBR ABBREVIATIONS:
+ *   - @todo List any abbreviations, precede each with a dash ('-').
+ *
+ * @section TRACE TRACEABILITY INFO:
+ *   - Design Document(s):
+ *     - @todo Update list of design document(s).
+ *
+ *   - Requirements Document(s):
+ *     - @todo Update list of requirements document(s)
+ *
+ *   - Applicable Standards (in order of precedence: highest first):
+ *     - @todo Update list of other applicable standards
+ *
+ */
+/*==========================================================================*/
+
+/*===========================================================================*
+ * Header Files
+ *===========================================================================*/
+#include <stdio.h>
+#include <stdlib.h>
+#include "queue.h"
+
+/*===========================================================================*
+ * The matching function
+ *===========================================================================*/
+static void free_int(void *data)
+{
+    free(data);
+}
+
+/*===========================================================================*
+ * The usage example
+ *===========================================================================*/
+int queue_example(void)
+{
+    #define QUEUE_CAPACITY 32
+    void *buffer[QUEUE_CAPACITY];
+
+    Queue q;
+
+    if (!queue_init(&q, buffer, QUEUE_CAPACITY))
+    {
+        printf("Failed to initialize queue\n");
+        return 1;
+    }
+
+    printf("Queue initialized with capacity %zu\n", QUEUE_CAPACITY);
+
+    // Push elements 1..5
+    for (int i = 1; i <= 5; i++)
+    {
+        int *v = malloc(sizeof(int));
+        *v = i;
+        if (queue_push(&q, v))
+            printf("Pushed %d\n", *v);
+        else
+            printf("Queue full, cannot push %d\n", *v);
+    }
+
+    printf("Queue full? %s\n", queue_is_full(&q) ? "yes" : "no");
+
+    // Peek at head
+    int *peeked = (int *)queue_peek(&q);
+    if (peeked)
+        printf("Peeked at head: %d\n", *peeked);
+
+    // Pop 3 elements
+    for (int i = 0; i < 3; i++)
+    {
+        int *popped = (int *)queue_pop(&q);
+        if (popped)
+        {
+            printf("Popped %d\n", *popped);
+            free_int(popped);
+        }
+    }
+
+    printf("Queue empty? %s\n", queue_is_empty(&q) ? "yes" : "no");
+
+    // Push 2 more elements to test wrap-around
+    for (int i = 6; i <= 7; i++)
+    {
+        int *v = malloc(sizeof(int));
+        *v = i;
+        if (queue_push(&q, v))
+            printf("Pushed %d\n", *v);
+        else
+            printf("Queue full, cannot push %d\n", *v);
+    }
+
+    // Pop remaining elements
+    while (!queue_is_empty(&q))
+    {
+        int *popped = (int *)queue_pop(&q);
+        if (popped)
+        {
+            printf("Popped %d\n", *popped);
+            free_int(popped);
+        }
+    }
+
+    printf("Queue empty? %s\n", queue_is_empty(&q) ? "yes" : "no");
+
+    queue_free(&q);
+
+    return 0;
+}

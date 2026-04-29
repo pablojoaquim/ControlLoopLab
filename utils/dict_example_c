@@ -1,0 +1,138 @@
+/*===========================================================================*/
+/**
+ * @file dict_example.c
+ *
+ *------------------------------------------------------------------------------
+ *
+ * @section DESC DESCRIPTION:
+ * Example on how to use the Dictionary module
+ *
+ * @section ABBR ABBREVIATIONS:
+ *   - @todo List any abbreviations, precede each with a dash ('-').
+ *
+ * @section TRACE TRACEABILITY INFO:
+ *   - Design Document(s):
+ *     - @todo Update list of design document(s).
+ *
+ *   - Requirements Document(s):
+ *     - @todo Update list of requirements document(s)
+ *
+ *   - Applicable Standards (in order of precedence: highest first):
+ *     - @todo Update list of other applicable standards
+ *
+ */
+/*==========================================================================*/
+
+/*===========================================================================*
+ * Header Files
+ *===========================================================================*/
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "dict.h"
+
+/*===========================================================================*
+ * typedefs
+ *===========================================================================*/
+// Example structure for values
+typedef struct
+{
+    int temperature;
+    int humidity;
+} sensor_data_t;
+
+/*===========================================================================*
+ * custom functions
+ *===========================================================================*/
+// Custom free function for sensor data
+void free_sensor_data(void *value)
+{
+    if (value)
+    {
+        printf("  Freeing sensor data at %p\n", value);
+        free(value);
+    }
+}
+
+// Iterator function example
+void print_entry(const char *key, void *value)
+{
+    sensor_data_t *data = (sensor_data_t *)value;
+    printf("  %s: temp=%d, humidity=%d\n", key, data->temperature, data->humidity);
+}
+
+/*===========================================================================*
+ * The usage example
+ *===========================================================================*/
+int dict_example(void)
+{
+    uint16_t max_entries = 64;
+    uint16_t key_max_len = 32;
+
+    size_t storage_size = dict_calc_storage_size_req(max_entries, key_max_len);
+    void *storage = malloc(storage_size);
+    if (!storage)
+    {
+        printf("Failed to allocate storage\n");
+        return 1;
+    }
+
+    dict_t my_dict;
+    if (!dict_init(&my_dict, storage, max_entries, key_max_len, free_sensor_data))
+    {
+        printf("Failed to initialize dictionary\n");
+        free(storage);
+        return 1;
+    }
+
+    // Insert sensor data
+    sensor_data_t *sensor1 = malloc(sizeof(sensor_data_t));
+    sensor1->temperature = 25;
+    sensor1->humidity = 60;
+    dict_set(&my_dict, "living_room", sensor1);
+
+    sensor_data_t *sensor2 = malloc(sizeof(sensor_data_t));
+    sensor2->temperature = 22;
+    sensor2->humidity = 55;
+    dict_set(&my_dict, "bedroom", sensor2);
+
+    sensor_data_t *sensor3 = malloc(sizeof(sensor_data_t));
+    sensor3->temperature = 28;
+    sensor3->humidity = 65;
+    dict_set(&my_dict, "kitchen", sensor3);
+
+    // Print single entry
+    sensor_data_t *data = (sensor_data_t *)dict_get(&my_dict, "living_room");
+    if (data)
+        printf("Living room: temp=%d, humidity=%d\n\n", data->temperature, data->humidity);
+
+    // Iterate all
+    printf("All sensors:\n");
+    dict_foreach(&my_dict, print_entry);
+
+    // Update
+    printf("\nUpdating living_room...\n");
+    sensor_data_t *new_sensor1 = malloc(sizeof(sensor_data_t));
+    new_sensor1->temperature = 26;
+    new_sensor1->humidity = 58;
+    dict_set(&my_dict, "living_room", new_sensor1);
+
+    printf("\nAfter update:\n");
+    dict_foreach(&my_dict, print_entry);
+
+    // Delete entry
+    printf("\nDeleting bedroom...\n");
+    dict_delete(&my_dict, "bedroom");
+
+    printf("\nAfter deletion:\n");
+    dict_foreach(&my_dict, print_entry);
+    printf("\nSize: %u\n", dict_size(&my_dict));
+
+    // Cleanup
+    printf("\nDestroying dictionary...\n");
+    dict_clear(&my_dict);
+    free(storage);
+
+    printf("\nDone!\n");
+    return 0;
+}

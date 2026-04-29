@@ -1,0 +1,1 @@
+Add the assets in this folder, like images, sounds, videos, documents, etc.

@@ -1,0 +1,138 @@
+/*===========================================================================*/
+/**
+ * @file list_example.c
+ *
+ *------------------------------------------------------------------------------
+ *
+ * @section DESC DESCRIPTION:
+ * Example on how to use the Simple Linked List module
+ *
+ * @section ABBR ABBREVIATIONS:
+ *   - @todo List any abbreviations, precede each with a dash ('-').
+ *
+ * @section TRACE TRACEABILITY INFO:
+ *   - Design Document(s):
+ *     - @todo Update list of design document(s).
+ *
+ *   - Requirements Document(s):
+ *     - @todo Update list of requirements document(s)
+ *
+ *   - Applicable Standards (in order of precedence: highest first):
+ *     - @todo Update list of other applicable standards
+ *
+ */
+/*==========================================================================*/
+
+/*===========================================================================*
+ * Header Files
+ *===========================================================================*/
+#include <stdio.h>
+#include <stdlib.h>
+#include "list.h"
+
+/*===========================================================================*
+ * callbacks
+ *===========================================================================*/
+bool match_int(const void *node_data, const void *criteria)
+{
+    return *(const int *)node_data == *(const int *)criteria;
+}
+
+static void free_int(void *data)
+{
+    free(data);
+}
+
+static void print_int(void *data)
+{
+    printf("%d ", *(int *)data);
+}
+
+/*===========================================================================*
+ * The usage example
+ *===========================================================================*/
+int list_example(void)
+{
+    #define LIST_CAPACITY 64
+    ListNode pool[LIST_CAPACITY];
+
+    List list;
+    list_init(&list, pool, LIST_CAPACITY);
+
+    // Push elements
+    for (int i = 1; i <= 3; i++)
+    {
+        int *v = malloc(sizeof(int));
+        *v = i;
+        list_push_tail(&list, v);
+    }
+
+    printf("Initial list: ");
+    list_foreach(&list, print_int);
+    printf("\n");
+
+    printf("Size: %zu, empty: %s\n", list_size(&list), list_is_empty(&list) ? "yes" : "no");
+
+    // Pop head and tail
+    int *p = list_pop_head(&list);
+    if (p)
+    {
+        printf("Pop head: %d\n", *p);
+        free(p);
+    }
+
+    p = list_pop_tail(&list);
+    if (p)
+    {
+        printf("Pop tail: %d\n", *p);
+        free(p);
+    }
+
+    // Find and remove
+    int *v4 = malloc(sizeof(int));
+    *v4 = 4;
+    list_push_tail(&list, v4);
+    printf("After push again: ");
+    list_foreach(&list, print_int);
+    printf("\n");
+
+    int key = 4;
+    printf("Contains 4? %s\n", list_contains(&list, &key, match_int) ? "yes" : "no");
+
+    list_remove(&list, &key, match_int, free_int);
+    printf("After remove 4: ");
+    list_foreach(&list, print_int);
+    printf("\n");
+
+    // Clear remaining
+    list_clear(&list, free_int);
+    printf("Cleared. Size: %zu, empty: %s\n", list_size(&list), list_is_empty(&list) ? "yes" : "no");
+
+    return 0;
+
+    // List l;
+    // list_init(&l);
+    // int a = 10, b = 20, c = 30;
+
+    // printf("push head: %d\n", a);
+    // list_push_head(&l, &a);
+
+    // printf("push tail: %d\n", b);
+    // list_push_tail(&l, &b);
+
+    // printf("push tail: %d\n", c);
+    // list_push_tail(&l, &c);
+
+    // int key = 20;
+    // printf("Contains 20? %s\n", list_contains(&l, &key, match_int) ? "yes" : "no");
+
+    // int *p = list_pop_head(&l);
+    // if (p)
+    //     printf("pop head: %d\n", *p);
+
+    // p = list_pop_tail(&l);
+    // if (p)
+    //     printf("pop tail: %d\n", *p);
+
+    // return 0;
+}

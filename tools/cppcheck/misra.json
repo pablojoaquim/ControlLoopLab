@@ -1,0 +1,7 @@
+{
+    "script": "misra.py",
+    "args": [
+        "--rule-texts=tools/cppcheck/misra_c_2012.txt"
+    ],
+    "ctu": true
+}

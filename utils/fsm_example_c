@@ -1,0 +1,137 @@
+/*===========================================================================*/
+/**
+ * @file fsm_example.c
+ *
+ *------------------------------------------------------------------------------
+ * Copyright (c) 2025 - Pablo Joaquim
+ * MIT License: https://opensource.org/licenses/MIT
+ *------------------------------------------------------------------------------
+ *
+ * @section DESC DESCRIPTION:
+ * Example on how to use the FSM module
+ *
+ * @section ABBR ABBREVIATIONS:
+ *   - @todo List any abbreviations, precede each with a dash ('-').
+ *
+ * @section TRACE TRACEABILITY INFO:
+ *   - Design Document(s):
+ *     - @todo Update list of design document(s).
+ *
+ *   - Requirements Document(s):
+ *     - @todo Update list of requirements document(s)
+ *
+ *   - Applicable Standards (in order of precedence: highest first):
+ *     - @todo Update list of other applicable standards
+ *
+ */
+/*==========================================================================*/
+
+/*===========================================================================*
+ * Header Files
+ *===========================================================================*/
+#include <stdio.h>
+#include "fsm.h"
+
+/*===========================================================================*
+ * The states IDs
+ *===========================================================================*/
+enum
+{
+    S_IDLE = 1,
+    S_WORKING = 2,
+    S_ERROR = 3
+};
+enum
+{
+    EV_START = 1,
+    EV_STOP = 2,
+    EV_FAIL = 3,
+    EV_RESET = 4
+};
+
+/*===========================================================================*
+ * The entry/exit/do Function Definitions
+ *===========================================================================*/
+static void idle_entry(fsm_ctx_t *ctx) { printf("ENTER IDLE\n"); }
+static void idle_exit(fsm_ctx_t *ctx) { printf("EXIT IDLE\n"); }
+static void idle_do(fsm_ctx_t *ctx) { printf("IDLE...\n"); }
+
+static void work_entry(fsm_ctx_t *ctx) { printf("ENTER WORKING\n"); }
+static void work_exit(fsm_ctx_t *ctx) { printf("EXIT WORKING\n"); }
+static void work_do(fsm_ctx_t *ctx) { printf("WORKING...\n"); }
+
+static void err_entry(fsm_ctx_t *ctx) { printf("ENTER ERROR\n"); }
+static void err_exit(fsm_ctx_t *ctx) { printf("EXIT ERROR\n"); }
+static void err_do(fsm_ctx_t *ctx) {}
+
+/*===========================================================================*
+ * The guard Function Definitions
+ *===========================================================================*/
+static bool guard_always(fsm_ctx_t *ctx, void *d)
+{
+    return true;
+}
+static bool guard_if_positive(fsm_ctx_t *ctx, void *d)
+{
+    if (!d)
+        return false;
+    return ((*(int *)d) > 0);
+}
+
+/*===========================================================================*
+ * The action Function Definitions
+ *===========================================================================*/
+static void action_start(fsm_ctx_t *ctx, void *d) { printf("ACTION: start\n"); }
+static void action_stop(fsm_ctx_t *ctx, void *d) { printf("ACTION: stop\n"); }
+static void action_fail(fsm_ctx_t *ctx, void *d) { printf("ACTION: fail reported\n"); }
+
+/*===========================================================================*
+ * The States and Transitions tables
+ *===========================================================================*/
+static fsm_state_t states[] =
+{
+    { S_IDLE,    "IDLE",    idle_entry, idle_exit, idle_do },
+    { S_WORKING, "WORKING", work_entry, work_exit, work_do },
+    { S_ERROR,   "ERROR",   err_entry,  err_exit,  err_do }
+};
+
+static fsm_transition_t transitions[] = 
+{
+    { S_IDLE,    EV_START, guard_always,      action_start, S_WORKING },
+    { S_WORKING, EV_STOP,  guard_always,      action_stop,  S_IDLE },
+    { S_WORKING, EV_FAIL,  guard_if_positive, action_fail,  S_ERROR },
+    { S_ERROR,   EV_RESET, guard_always,      NULL,         S_IDLE }
+};
+
+/*===========================================================================*
+ * The usage example
+ *===========================================================================*/
+void fsm_example (void)
+{
+    fsm_ctx_t ctx;
+    fsm_setup(
+        &ctx,
+        states, sizeof(states)/sizeof(states[0]),
+        transitions, sizeof(transitions)/sizeof(transitions[0])
+    );
+
+    fsm_init(&ctx, S_IDLE);
+
+    /* Post some events */
+    fsm_post_event(&ctx, EV_START, NULL);
+    fsm_post_event(&ctx, EV_FAIL, NULL); /* guard_if_positive -> require positive data, so no transitioning expected */
+
+    int positive = 5;
+    fsm_post_event(&ctx, EV_FAIL, &positive);
+
+    fsm_post_event(&ctx, EV_RESET, NULL);
+
+    /* Process up to 10 events */
+    fsm_process_events(&ctx, 10);
+
+    /* Execute the on_do() of the current state */
+    for (int i = 0; i < 3; ++i)
+    {
+        fsm_run_do_action(&ctx);
+    }
+}
