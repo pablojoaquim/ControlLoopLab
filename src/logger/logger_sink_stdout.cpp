@@ -1,6 +1,6 @@
 /*===========================================================================*/
 /**
- * @file main.cpp
+ * @file logger_sink_stdout.cpp
  *
  *------------------------------------------------------------------------------
  * Copyright (c) 2025 - Pablo Joaquim
@@ -8,7 +8,7 @@
  *------------------------------------------------------------------------------
  *
  * @section DESC DESCRIPTION:
- * Add a description here
+ * The implementation of the interface of the logging sink to implement the stdout
  *
  * @section ABBR ABBREVIATIONS:
  *   - @todo List any abbreviations, precede each with a dash ('-').
@@ -29,33 +29,17 @@
 /*===========================================================================*
  * Header Files
  *===========================================================================*/
-#include <iostream>
-#include <memory>
-#include <string>
-#include <cstring>
-#include <cstdint>
-#include <vector>
-#include <thread>
-#include <chrono>
-#include <cstdlib>
-
-#include "katas.h"
-#include "FirstOrderPlant.h"
-#include "SecondOrderPlant.h"
-#include "PIDController.h"
-#include "logger.h"
 #include "logger_sink_stdout.h"
-#include "logger_sink_file.h"
+#include <iostream>
 
 /*===========================================================================*
  * Local Preprocessor #define Constants
  *===========================================================================*/
-#define NDEBUG
+// #define NDEBUG
 
 /*===========================================================================*
  * Local Preprocessor #define MACROS
  *===========================================================================*/
-#define NumElems(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 /*===========================================================================*
  * Local Type Declarations
@@ -80,84 +64,48 @@
 /*===========================================================================*
  * Function Definitions
  *===========================================================================*/
-extern "C"
+// Helper function to obtain a color depending on the logging level
+static const char* levelColor(LogLevel lvl)
 {
+    switch(lvl)
+    {
+        case LogLevel::Debug: return "\033[36m"; // cyan
+        case LogLevel::Info:  return "\033[32m"; // green
+        case LogLevel::Warn:  return "\033[33m"; // yellow
+        case LogLevel::Error: return "\033[31m"; // red
+        default: return "\033[0m";
+    }
+}
+
+// Helper function to obtain a string depending on the logging level
+static const char* levelToStr(LogLevel lvl)
+{
+    switch(lvl)
+    {
+        case LogLevel::Debug: return "DEBUG";
+        case LogLevel::Info:  return "INFO";
+        case LogLevel::Warn:  return "WARN";
+        case LogLevel::Error: return "ERROR";
+        default: return "";
+    }
 }
 
 /*****************************************************************************
- * @fn         main
- * @brief      The main entry point
- * @param [in] void
- * @return     0 -success, -1 -Error
+ * Name         write
+ * Description  write message implementation to the stdout as the logging output
  *****************************************************************************/
-int main(int argc, char *argv[])
+void StdoutSink::write(const LogRecord& r) noexcept
 {
-    (void)argc;
-    (void)argv;
+    const char* color = levelColor(r.level);
+    const char* reset = "\033[0m";
 
-    Logger logger;
-
-    StdoutSink console;
-    FileSink file("output.csv", LogLevel::Info);
-
-    logger.setLevel(LogLevel::Debug);
-    logger.addSink(&console);
-    logger.addSink(&file);
-    g_logger = &logger;
-
-    file.writeHeader("time,setpoint,output,control_signal");
-
-    // std::ofstream log("output.csv");
-
-    // if(!log.is_open()) {
-    //     std::cerr << "Error opening output.csv for writing!" << std::endl;
-    //     return -1;
-    // }
-
-    // std::cout << "=== Start ===" << std::endl;
-    LOG_INFO("Starting simulation");
-    // Plant: K=1, tau=1
-    // FirstOrderPlant plant(1.0, 1.0);
-
-    SecondOrderPlant plant(1.0, 4.0, 0.3);
-
-    // PID: tweak these later
-    PIDController pid(2.0, 1.0, 0.1, -10, 10);
-
-    double dt = 0.01;
-    double simulation_time = 5.0;
-    double setpoint = 1.0;
-
-    double y = 0.0;
-
-    // Header CSV
-    // log->info("time,setpoint,output,control_signal");
-
-    for (double t = 0.0; t <= simulation_time; t += dt) {
-        double u = pid.compute(setpoint, y, dt);
-        y = plant.update(u, dt);
-
-        // CSV output
-        LOG_INFO(
-            std::to_string(t) + "," +
-            std::to_string(setpoint) + "," +
-            std::to_string(y) + "," +
-            std::to_string(u)
-        );
-
-        // Debug (solo consola)
-        LOG_DEBUG(
-            "t=" + std::to_string(t) +
-            " y=" + std::to_string(y) +
-            " u=" + std::to_string(u)
-        );
-
-    }
-
-    // std::cout << "===  End  ===" << std::endl;
-    LOG_INFO("Simulation finished");
-
-    std::system("gnuplot -persist -e \"filename='output.csv'\" tools/plot.gp");
-
-    return 0;
+    std::cout
+        << color
+        << "[" << levelToStr(r.level) << "]\t"
+        << "[" << r.file << ":" << r.line << "]\t"
+        << "[" << r.function << "]\t"
+        << r.message
+        << reset
+        << "\n";
 }
+
