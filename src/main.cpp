@@ -189,11 +189,11 @@ int main(int argc, char *argv[])
      * Simulation parameters
      *===========================================================================*/
     double dt = 0.01;
-    double simulation_time = 15.0;
+    double simulation_time = 5.0;
     double setpoint = 1.0;
-    double kp = 2.0;
-    double ki = 1.0;
-    double kd = 0.1;
+    double kp = 1.0;
+    double ki = 0.0;
+    double kd = 0.0;
 
     /*===========================================================================*
      * System setup
@@ -210,6 +210,7 @@ int main(int argc, char *argv[])
     std::vector<double> time;
     std::vector<double> output;
     std::vector<double> sp;
+    std::vector<double> input;
 
     const size_t MAX_POINTS = 500;
 
@@ -270,19 +271,22 @@ int main(int argc, char *argv[])
             time.push_back(t);
             output.push_back(y);
             sp.push_back(setpoint);
-
+            input.push_back(u);
             // Keep only the latest MAX_POINTS for plotting
             if (time.size() > MAX_POINTS)
             {
                 time.erase(time.begin());
                 output.erase(output.begin());
                 sp.erase(sp.begin());
+                input.erase(input.begin());
+
             }
 
             // Send data to gnuplot
             fprintf(gp,
                 "plot '-' using 1:2 with lines title 'Setpoint', "
-                "'-' using 1:2 with lines title 'Output'\n");
+                "'-' using 1:2 with lines title 'Output', "
+                "'-' using 1:2 with lines title 'Input'\n");
 
             // Setpoint
             for (size_t i = 0; i < time.size(); ++i)
@@ -292,6 +296,11 @@ int main(int argc, char *argv[])
             // Output
             for (size_t i = 0; i < time.size(); ++i)
                 fprintf(gp, "%f %f\n", time[i], output[i]);
+            fprintf(gp, "e\n");
+
+            // Input
+            for (size_t i = 0; i < time.size(); ++i)
+                fprintf(gp, "%f %f\n", time[i], input[i]);
             fprintf(gp, "e\n");
 
             fflush(gp);
