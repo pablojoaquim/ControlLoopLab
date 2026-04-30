@@ -1,9 +1,9 @@
-#ifndef FUZZY_LOGIC_H
-#define FUZZY_LOGIC_H
+#ifndef FUZZY_CONTROLLER_H
+#define FUZZY_CONTROLLER_H
 
 /*===========================================================================*/
 /**
- * @file fuzzy_logic.h
+ * @file fuzzy_controller.h
  *
  *------------------------------------------------------------------------------
  * Copyright (c) 2026 - Pablo Joaquim
@@ -279,4 +279,4 @@ public:
 
 #endif /* __cplusplus */
 
-#endif /* FUZZY_LOGIC_H */
+#endif /* FUZZY_CONTROLLER_H */

@@ -45,6 +45,7 @@
 #include "FirstOrderPlant.h"
 #include "SecondOrderPlant.h"
 #include "PIDController.h"
+#include "FuzzyController.h"
 #include "logger.h"
 #include "logger_sink_stdout.h"
 #include "logger_sink_file.h"
@@ -87,42 +88,6 @@ extern "C"
 }
 
 /*****************************************************************************
- * @fn         drawControlPanel
- * @brief      Draw the control panel in the terminal
- * @param [in] kp, ki, kd - PID parameters
- * @param [in] setpoint - current setpoint
- * @param [in] paused - whether the simulation is paused
- * @return     void
- *****************************************************************************/
-void drawControlPanel(double kp, double ki, double kd,
-                      double setpoint, bool paused)
-{
-    // Limpiar pantalla y mover cursor arriba
-    std::cout << "\033[2J\033[H";
-
-    std::cout << "=== PID CONTROL PANEL ===\n\n";
-
-    std::cout << "Kp: " << kp << "   (w/s)\n";
-    std::cout << "Ki: " << ki << "   (e/d)\n";
-    std::cout << "Kd: " << kd << "   (r/f)\n\n";
-
-    std::cout << "Setpoint: " << setpoint << "   (t/g)\n\n";
-
-    std::cout << "Controls:\n";
-    std::cout << "  w/s -> Kp +/-\n";
-    std::cout << "  e/d -> Ki +/-\n";
-    std::cout << "  r/f -> Kd +/-\n";
-    std::cout << "  t/g -> Setpoint +/-\n";
-    std::cout << "  p   -> Pause\n";
-    std::cout << "  c   -> Continue\n";
-    std::cout << "  x   -> Reset PID\n";
-    std::cout << "  q   -> Quit\n\n";
-
-    std::cout << "Status: " << (paused ? "PAUSED" : "RUNNING") << "\n";
-}
-
-
-/*****************************************************************************
  * @fn         main
  * @brief      The main entry point
  * @param [in] void
@@ -139,7 +104,7 @@ int main(int argc, char *argv[])
      * Gnuplot setup
      *===========================================================================*/
     // Open a pipe to gnuplot
-    FILE* gp = popen("gnuplot -persistent", "w");
+    FILE *gp = popen("gnuplot -persistent", "w");
     if (!gp)
     {
         printf("Error: could not open gnuplot\n");
@@ -162,13 +127,13 @@ int main(int argc, char *argv[])
     logger.setLevel(LogLevel::Debug);
     logger.addSink(&consoleLogger);
     logger.addSink(&fileLogger);
-    
+
     // Header CSV output
     LOG_INFO(&logger, "time,setpoint,output,control_signal");
 
     /*===========================================================================*
      * Terminal setup for non-blocking input
-     *===========================================================================*/    
+     *===========================================================================*/
     termios oldt, newt;
     // Save current terminal state
     tcgetattr(STDIN_FILENO, &oldt);
@@ -180,10 +145,9 @@ int main(int argc, char *argv[])
 
     // Non-blocking
     fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
-    
+
     char key = '\0';
     bool exit_requested = false;
-    bool paused = false;
 
     /*===========================================================================*
      * Simulation parameters
@@ -191,138 +155,182 @@ int main(int argc, char *argv[])
     double dt = 0.01;
     double simulation_time = 5.0;
     double setpoint = 1.0;
-    double kp = 1.0;
-    double ki = 0.0;
-    double kd = 0.0;
 
     /*===========================================================================*
-     * System setup
+     * Plant setup
      *===========================================================================*/
     // FirstOrderPlant plant(1.0, 1.0);         // Plant: K=1, tau=1
-    SecondOrderPlant plant(1.0, 4.0, 0.3);      // Plant: K=1, omega_n=4, psi=0.3 (underdamped)
-    PIDController pid(kp, ki, kd, -10, 10);     // PID: Kp=2, Ki=1, Kd=0.1, output limits [-10, 10]
+    SecondOrderPlant plant_pid(1.0, 4.0, 0.3);   // Plant: K=1, omega_n=4, psi=0.3 (underdamped)
+    SecondOrderPlant plant_fuzzy(1.0, 4.0, 0.3); // Plant: K=1, omega_n=4, psi=0.3 (underdamped)
 
-    double y = 0.0;
+    /*===========================================================================*
+     * PID Controller setup
+     *===========================================================================*/
+    double kp = 2.0;
+    double ki = 1.0;
+    double kd = 0.1;
+    PIDController pid(kp, ki, kd, -10, 10); // PID: Kp=2, Ki=1, Kd=0.1, output limits [-10, 10]
+    double y_pid = 0.0;
 
+    /*===========================================================================*
+     * Fuzzy Controller setup
+     *===========================================================================*/
+    // Define linguistic variables and fuzzy sets for the fuzzy controller
+    LinguisticVariable error("error", -2, 2);
+    error.addFuzzySet("neg", std::make_shared<TriangularMembershipFunction>(-2, -1, 0));
+    error.addFuzzySet("zero", std::make_shared<TriangularMembershipFunction>(-0.5, 0, 0.5));
+    error.addFuzzySet("pos", std::make_shared<TriangularMembershipFunction>(0, 1, 2));
+
+    LinguisticVariable d_error("d_error", -1, 1);
+    d_error.addFuzzySet("neg", std::make_shared<TriangularMembershipFunction>(-1, -0.5, 0));
+    d_error.addFuzzySet("zero", std::make_shared<TriangularMembershipFunction>(-0.1, 0, 0.1));
+    d_error.addFuzzySet("pos", std::make_shared<TriangularMembershipFunction>(0, 0.5, 1));
+
+    LinguisticVariable control("control", -10, 10);
+    control.addFuzzySet("neg", std::make_shared<TriangularMembershipFunction>(-10, -5, 0));
+    control.addFuzzySet("zero", std::make_shared<TriangularMembershipFunction>(-1, 0, 1));
+    control.addFuzzySet("pos", std::make_shared<TriangularMembershipFunction>(0, 5, 10));
+
+    // Create fuzzy inference engine and add rules
+    InferenceEngine engine;
+    // POS
+    engine.addRule(FuzzyRule({{"error","pos"},{"d_error","pos"}}, {"control","neg"}));
+    engine.addRule(FuzzyRule({{"error","pos"},{"d_error","zero"}}, {"control","neg"}));
+    engine.addRule(FuzzyRule({{"error","pos"},{"d_error","neg"}}, {"control","zero"}));
+
+    // ZERO
+    engine.addRule(FuzzyRule({{"error","zero"},{"d_error","zero"}}, {"control","zero"}));
+    engine.addRule(FuzzyRule({{"error","zero"},{"d_error","pos"}}, {"control","neg"}));
+    engine.addRule(FuzzyRule({{"error","zero"},{"d_error","neg"}}, {"control","pos"}));
+
+    // NEG
+    engine.addRule(FuzzyRule({{"error","neg"},{"d_error","neg"}}, {"control","pos"}));
+    engine.addRule(FuzzyRule({{"error","neg"},{"d_error","zero"}}, {"control","pos"}));
+    engine.addRule(FuzzyRule({{"error","neg"},{"d_error","pos"}}, {"control","zero"}));
+
+    // Create fuzzy controller
+    Defuzzifier defuzz;
+
+    double y_fuzzy = 0.0;
+    double prev_error = 0.0;
+    
     /*===========================================================================*
      * Buffers (sliding window) for plotting
      *===========================================================================*/
     std::vector<double> time;
-    std::vector<double> output;
-    std::vector<double> sp;
-    std::vector<double> input;
+    std::vector<double> setpoint_vec;
+    std::vector<double> y_pid_vec;
+    std::vector<double> y_fuzzy_vec;
 
     const size_t MAX_POINTS = 500;
 
     /*===========================================================================*
      * Simulation loop
-     *===========================================================================*/                
-    for (double t = 0.0; t <= simulation_time && !exit_requested; t += dt) 
+     *===========================================================================*/
+    for (double t = 0.0; t <= simulation_time && !exit_requested; t += dt)
     {
         /*===========================================================================*
          * Handle user input to adjust PID parameters and setpoint
          *===========================================================================*/
-        drawControlPanel(kp, ki, kd, setpoint, paused);  
         while (read(STDIN_FILENO, &key, 1) > 0)
         {
-            if(key != '\0')
+            if (key != '\0')
             {
                 switch (key)
                 {
-                    case 'w': kp += 0.1; break;
-                    case 's': kp -= 0.1; break;
-                    case 'e': ki += 0.1; break;
-                    case 'd': ki -= 0.1; break;
-                    case 'r': kd += 0.01; break;
-                    case 'f': kd -= 0.01; break;
-                    case 't': setpoint += 0.5; break;
-                    case 'g': setpoint -= 0.5; break;
-                    case 'p': paused = true; break;
-                    case 'c': paused = false; break;
-                    case 'x': pid.reset(); break;
-                    case 'q': exit_requested = true; break;
+                case 'q':
+                    exit_requested = true;
+                    break;
                 }
 
-                printf("\rKp=%.2f Ki=%.2f Kd=%.2f SP=%.2f   ", kp, ki, kd, setpoint);
                 fflush(stdout);
-
-                pid.setKp(kp);
-                pid.setKi(ki);
-                pid.setKd(kd);
-
                 key = '\0';
             }
         }
-        
-            /*===========================================================================*
-            * Compute control signal and update plant 
-            *===========================================================================*/
-           double u = 0.0;  
-            if(!paused)
-            {
-                u = pid.compute(setpoint, y, dt);
-                y = plant.update(u, dt);
-            }
 
-            /*===========================================================================*
-            * Plotting
-            *===========================================================================*/
-            // Update buffers for plotting
-            time.push_back(t);
-            output.push_back(y);
-            sp.push_back(setpoint);
-            input.push_back(u);
-            // Keep only the latest MAX_POINTS for plotting
-            if (time.size() > MAX_POINTS)
-            {
-                time.erase(time.begin());
-                output.erase(output.begin());
-                sp.erase(sp.begin());
-                input.erase(input.begin());
+        /*===========================================================================*
+         * Compute PID control signal and update plant
+         *===========================================================================*/
+        double error_pid = setpoint - y_pid;
+        double u_pid = pid.compute(setpoint, y_pid, dt);
+        y_pid = plant_pid.update(u_pid, dt);
 
-            }
+        /*===========================================================================*
+         * Fuzzy control signal and update plant
+         *===========================================================================*/
+        double error_fuzzy = setpoint - y_fuzzy;
+        double derivative_error = (error_fuzzy - prev_error) / dt;
+        prev_error = error_fuzzy;
+        auto error_fuzzified = error.fuzzify(error_fuzzy);
+        auto derivative_error_fuzzified = d_error.fuzzify(derivative_error);
 
-            // Send data to gnuplot
-            fprintf(gp,
+        std::map<LinguisticVariableName,
+                 std::map<FuzzySetName, double>>
+            inputs;
+
+        inputs["error"] = error_fuzzified;
+        inputs["d_error"] = derivative_error_fuzzified;
+
+        auto outputs = engine.infer(inputs);
+        double u_fuzzy = defuzz.defuzzify(outputs["control"], control);
+
+        y_fuzzy = plant_fuzzy.update(u_fuzzy, dt);
+
+        /*===========================================================================*
+         * Plotting
+         *===========================================================================*/
+        // Update buffers for plotting
+        time.push_back(t);
+        setpoint_vec.push_back(setpoint);
+        y_pid_vec.push_back(y_pid);
+        y_fuzzy_vec.push_back(y_fuzzy);
+        // Keep only the latest MAX_POINTS for plotting
+        if (time.size() > MAX_POINTS)
+        {
+            time.erase(time.begin());
+            setpoint_vec.erase(setpoint_vec.begin());
+            y_pid_vec.erase(y_pid_vec.begin());
+            y_fuzzy_vec.erase(y_fuzzy_vec.begin());
+        }
+
+        // Send data to gnuplot
+        fprintf(gp,
                 "plot '-' using 1:2 with lines title 'Setpoint', "
-                "'-' using 1:2 with lines title 'Output', "
-                "'-' using 1:2 with lines title 'Input'\n");
+                "'-' using 1:2 with lines title 'PID Output', "
+                "'-' using 1:2 with lines title 'Fuzzy Output'\n");
 
-            // Setpoint
-            for (size_t i = 0; i < time.size(); ++i)
-                fprintf(gp, "%f %f\n", time[i], sp[i]);
-            fprintf(gp, "e\n");
+        // Setpoint
+        for (size_t i = 0; i < time.size(); ++i)
+            fprintf(gp, "%f %f\n", time[i], setpoint_vec[i]);
+        fprintf(gp, "e\n");
 
-            // Output
-            for (size_t i = 0; i < time.size(); ++i)
-                fprintf(gp, "%f %f\n", time[i], output[i]);
-            fprintf(gp, "e\n");
+        // PID Output
+        for (size_t i = 0; i < time.size(); ++i)
+            fprintf(gp, "%f %f\n", time[i], y_pid_vec[i]);
+        fprintf(gp, "e\n");
 
-            // Input
-            for (size_t i = 0; i < time.size(); ++i)
-                fprintf(gp, "%f %f\n", time[i], input[i]);
-            fprintf(gp, "e\n");
+        // Fuzzy Output
+        for (size_t i = 0; i < time.size(); ++i)
+            fprintf(gp, "%f %f\n", time[i], y_fuzzy_vec[i]);
+        fprintf(gp, "e\n");
 
-            fflush(gp);
+        fflush(gp);
 
-            /*===========================================================================*
-            * Logging
-            *===========================================================================*/
-            // CSV output
-            LOG_INFO(&logger,
-                std::to_string(t) + "," +
-                std::to_string(setpoint) + "," +
-                std::to_string(y) + "," +
-                std::to_string(u)
-            );
+        /*===========================================================================*
+         * Logging
+         *===========================================================================*/
+        // CSV output
+        LOG_INFO(&logger,
+                 std::to_string(t) + "," +
+                     std::to_string(setpoint) + "," +
+                     std::to_string(y_pid) + "," +
+                     std::to_string(u_pid));
 
-            // Debug output
-            LOG_DEBUG(&logger,
-                "t=" + std::to_string(t) +
-                " y=" + std::to_string(y) +
-                " u=" + std::to_string(u)
-            );
-
+        // Debug output
+        LOG_DEBUG(&logger,
+                  "t=" + std::to_string(t) + "," +
+                      " y=" + std::to_string(y_pid) + "," +
+                      " u=" + std::to_string(u_pid));
 
         // Sleep for a short time to simulate real-time and allow gnuplot to update
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -337,7 +345,6 @@ int main(int argc, char *argv[])
      * Terminal cleanup
      *===========================================================================*/
     tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
-
 
     std::cout << "===  End  ===" << std::endl;
 

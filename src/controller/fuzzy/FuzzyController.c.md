@@ -1,4 +1,4 @@
-## The following is an example of how to use the FuzzyLogic.h lib
+## The following is an example of how to use the FuzzyController.h lib
 
 LinguisticVariable error("error", -1.0, 1.0);
 error.addFuzzySet("NEG", std::make_shared<TriangularMembershipFunction>(-1, -1, 0));
