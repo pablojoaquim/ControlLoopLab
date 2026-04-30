@@ -42,7 +42,6 @@
 #include <fcntl.h>
 #include <termios.h>
 
-#include "katas.h"
 #include "FirstOrderPlant.h"
 #include "SecondOrderPlant.h"
 #include "PIDController.h"
