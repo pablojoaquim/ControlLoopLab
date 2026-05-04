@@ -41,6 +41,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <termios.h>
+#include <cmath>
 
 #include "FirstOrderPlant.h"
 #include "SecondOrderPlant.h"
@@ -162,6 +163,7 @@ int main(int argc, char *argv[])
     // FirstOrderPlant plant(1.0, 1.0);         // Plant: K=1, tau=1
     SecondOrderPlant plant_pid(1.0, 4.0, 0.3);   // Plant: K=1, omega_n=4, psi=0.3 (underdamped)
     SecondOrderPlant plant_fuzzy(1.0, 4.0, 0.3); // Plant: K=1, omega_n=4, psi=0.3 (underdamped)
+    SecondOrderPlant plant_smc(1.0, 4.0, 0.3);   // Plant: K=1, omega_n=4, psi=0.3 (underdamped)
 
     /*===========================================================================*
      * PID Controller setup
@@ -175,44 +177,64 @@ int main(int argc, char *argv[])
     /*===========================================================================*
      * Fuzzy Controller setup
      *===========================================================================*/
-    // Define linguistic variables and fuzzy sets for the fuzzy controller
-    LinguisticVariable error("error", -2, 2);
-    error.addFuzzySet("neg", std::make_shared<TriangularMembershipFunction>(-2, -1, 0));
-    error.addFuzzySet("zero", std::make_shared<TriangularMembershipFunction>(-0.5, 0, 0.5));
-    error.addFuzzySet("pos", std::make_shared<TriangularMembershipFunction>(0, 1, 2));
+    // Error: setpoint is 1.0, max expected error at startup = 1.0
+    LinguisticVariable error("error", -1.5, 1.5);
+    error.addFuzzySet("NB", std::make_shared<TriangularMembershipFunction>(-1.5, -1.0,  -0.5));
+    error.addFuzzySet("NS", std::make_shared<TriangularMembershipFunction>(-1.0, -0.5,   0.0));
+    error.addFuzzySet("ZE", std::make_shared<TriangularMembershipFunction>(-0.3,  0.0,   0.3));
+    error.addFuzzySet("PS", std::make_shared<TriangularMembershipFunction>( 0.0,  0.5,   1.0));
+    error.addFuzzySet("PB", std::make_shared<TriangularMembershipFunction>( 0.5,  1.0,   1.5));
 
-    LinguisticVariable d_error("d_error", -1, 1);
-    d_error.addFuzzySet("neg", std::make_shared<TriangularMembershipFunction>(-1, -0.5, 0));
-    d_error.addFuzzySet("zero", std::make_shared<TriangularMembershipFunction>(-0.1, 0, 0.1));
-    d_error.addFuzzySet("pos", std::make_shared<TriangularMembershipFunction>(0, 0.5, 1));
+    // d_error: with ω_n=4, expect rates up to ~8 at startup. Normalize by 8.
+    // Compute as: double de_norm = clamp(de_raw / 8.0, -1.0, 1.0);
+    LinguisticVariable d_error("d_error", -1.0, 1.0);
+    d_error.addFuzzySet("NG", std::make_shared<TriangularMembershipFunction>(-1.0, -0.5,  0.0));
+    d_error.addFuzzySet("ZE", std::make_shared<TriangularMembershipFunction>(-0.3,  0.0,  0.3));
+    d_error.addFuzzySet("PG", std::make_shared<TriangularMembershipFunction>( 0.0,  0.5,  1.0));
 
-    LinguisticVariable control("control", -10, 10);
-    control.addFuzzySet("neg", std::make_shared<TriangularMembershipFunction>(-10, -5, 0));
-    control.addFuzzySet("zero", std::make_shared<TriangularMembershipFunction>(-1, 0, 1));
-    control.addFuzzySet("pos", std::make_shared<TriangularMembershipFunction>(0, 5, 10));
+    // Control: PID saturates near ±10, keep same limit
+    LinguisticVariable control("control", -10.0, 10.0);
+    control.addFuzzySet("NB", std::make_shared<TriangularMembershipFunction>(-10.0, -7.0, -3.0));
+    control.addFuzzySet("NS", std::make_shared<TriangularMembershipFunction>( -5.0, -2.5,  0.0));
+    control.addFuzzySet("ZE", std::make_shared<TriangularMembershipFunction>( -1.0,  0.0,  1.0));
+    control.addFuzzySet("PS", std::make_shared<TriangularMembershipFunction>(  0.0,  2.5,  5.0));
+    control.addFuzzySet("PB", std::make_shared<TriangularMembershipFunction>(  3.0,  7.0, 10.0));
 
     // Create fuzzy inference engine and add rules
     InferenceEngine engine;
-    // POS
-    engine.addRule(FuzzyRule({{"error","pos"},{"d_error","pos"}}, {"control","neg"}));
-    engine.addRule(FuzzyRule({{"error","pos"},{"d_error","zero"}}, {"control","neg"}));
-    engine.addRule(FuzzyRule({{"error","pos"},{"d_error","neg"}}, {"control","zero"}));
-
-    // ZERO
-    engine.addRule(FuzzyRule({{"error","zero"},{"d_error","zero"}}, {"control","zero"}));
-    engine.addRule(FuzzyRule({{"error","zero"},{"d_error","pos"}}, {"control","neg"}));
-    engine.addRule(FuzzyRule({{"error","zero"},{"d_error","neg"}}, {"control","pos"}));
-
-    // NEG
-    engine.addRule(FuzzyRule({{"error","neg"},{"d_error","neg"}}, {"control","pos"}));
-    engine.addRule(FuzzyRule({{"error","neg"},{"d_error","zero"}}, {"control","pos"}));
-    engine.addRule(FuzzyRule({{"error","neg"},{"d_error","pos"}}, {"control","zero"}));
+    // PB error
+    engine.addRule(FuzzyRule({{"error","PB"},{"d_error","NG"}}, {"control","PS"}));
+    engine.addRule(FuzzyRule({{"error","PB"},{"d_error","ZE"}}, {"control","PB"}));
+    engine.addRule(FuzzyRule({{"error","PB"},{"d_error","PG"}}, {"control","PB"}));
+    // PS error
+    engine.addRule(FuzzyRule({{"error","PS"},{"d_error","NG"}}, {"control","ZE"}));
+    engine.addRule(FuzzyRule({{"error","PS"},{"d_error","ZE"}}, {"control","PS"}));
+    engine.addRule(FuzzyRule({{"error","PS"},{"d_error","PG"}}, {"control","PB"}));
+    // ZE error
+    engine.addRule(FuzzyRule({{"error","ZE"},{"d_error","NG"}}, {"control","NS"}));
+    engine.addRule(FuzzyRule({{"error","ZE"},{"d_error","ZE"}}, {"control","ZE"}));
+    engine.addRule(FuzzyRule({{"error","ZE"},{"d_error","PG"}}, {"control","PS"}));
+    // NS error
+    engine.addRule(FuzzyRule({{"error","NS"},{"d_error","NG"}}, {"control","NB"}));
+    engine.addRule(FuzzyRule({{"error","NS"},{"d_error","ZE"}}, {"control","NS"}));
+    engine.addRule(FuzzyRule({{"error","NS"},{"d_error","PG"}}, {"control","ZE"}));
+    // NB error
+    engine.addRule(FuzzyRule({{"error","NB"},{"d_error","NG"}}, {"control","NB"}));
+    engine.addRule(FuzzyRule({{"error","NB"},{"d_error","ZE"}}, {"control","NB"}));
+    engine.addRule(FuzzyRule({{"error","NB"},{"d_error","PG"}}, {"control","NS"}));
 
     // Create fuzzy controller
     Defuzzifier defuzz;
 
     double y_fuzzy = 0.0;
     double prev_error = 0.0;
+
+    /*===========================================================================*
+     * SMC Controller setup
+     *===========================================================================*/
+    double kp_smc = 5.0; // Gain for sliding mode control
+    double epsilon_smc = 0.1; // Boundary layer thickness for tanh approximation
+    double y_smc = 0.0;
     
     /*===========================================================================*
      * Buffers (sliding window) for plotting
@@ -221,6 +243,7 @@ int main(int argc, char *argv[])
     std::vector<double> setpoint_vec;
     std::vector<double> y_pid_vec;
     std::vector<double> y_fuzzy_vec;
+    std::vector<double> y_smc_vec;
 
     const size_t MAX_POINTS = 500;
 
@@ -256,25 +279,29 @@ int main(int argc, char *argv[])
         y_pid = plant_pid.update(u_pid, dt);
 
         /*===========================================================================*
-         * Fuzzy control signal and update plant
-         *===========================================================================*/
+        * Fuzzy control signal and update plant
+        *===========================================================================*/
         double error_fuzzy = setpoint - y_fuzzy;
-        double derivative_error = (error_fuzzy - prev_error) / dt;
-        prev_error = error_fuzzy;
-        auto error_fuzzified = error.fuzzify(error_fuzzy);
-        auto derivative_error_fuzzified = d_error.fuzzify(derivative_error);
+        double de_norm     = std::max(-1.0, std::min(1.0, (error_fuzzy - prev_error) / (dt * 8.0)));
+        prev_error         = error_fuzzy;
 
-        std::map<LinguisticVariableName,
-                 std::map<FuzzySetName, double>>
-            inputs;
+        auto outputs = engine.infer({
+            {"error",   error.fuzzify(error_fuzzy)},
+            {"d_error", d_error.fuzzify(de_norm)}
+        });
 
-        inputs["error"] = error_fuzzified;
-        inputs["d_error"] = derivative_error_fuzzified;
+        y_fuzzy = plant_fuzzy.update(defuzz.defuzzify(outputs["control"], control), dt);
 
-        auto outputs = engine.infer(inputs);
-        double u_fuzzy = defuzz.defuzzify(outputs["control"], control);
+        /*===========================================================================*
+         * SMC control signal
+         *===========================================================================*/
+        // Sliding surface: s = error + lambda * d_error
+        double error_smc = setpoint - y_smc;
+        double lambda = 5; // Tuning parameter for sliding surface
+        double s      = error_smc + lambda * (error_smc - prev_error) / dt;
+        double u_smc = std::clamp(kp_smc * tanh((s > 0.0 ? 1.0 : -1.0)/epsilon_smc), -10.0, 10.0);
 
-        y_fuzzy = plant_fuzzy.update(u_fuzzy, dt);
+        y_smc = plant_smc.update(u_smc, dt);
 
         /*===========================================================================*
          * Plotting
@@ -284,6 +311,8 @@ int main(int argc, char *argv[])
         setpoint_vec.push_back(setpoint);
         y_pid_vec.push_back(y_pid);
         y_fuzzy_vec.push_back(y_fuzzy);
+        y_smc_vec.push_back(y_smc);
+
         // Keep only the latest MAX_POINTS for plotting
         if (time.size() > MAX_POINTS)
         {
@@ -291,13 +320,15 @@ int main(int argc, char *argv[])
             setpoint_vec.erase(setpoint_vec.begin());
             y_pid_vec.erase(y_pid_vec.begin());
             y_fuzzy_vec.erase(y_fuzzy_vec.begin());
+            y_smc_vec.erase(y_smc_vec.begin());
         }
 
         // Send data to gnuplot
         fprintf(gp,
                 "plot '-' using 1:2 with lines title 'Setpoint', "
                 "'-' using 1:2 with lines title 'PID Output', "
-                "'-' using 1:2 with lines title 'Fuzzy Output'\n");
+                "'-' using 1:2 with lines title 'Fuzzy Output', "
+                "'-' using 1:2 with lines title 'SMC Output'\n");
 
         // Setpoint
         for (size_t i = 0; i < time.size(); ++i)
@@ -312,6 +343,11 @@ int main(int argc, char *argv[])
         // Fuzzy Output
         for (size_t i = 0; i < time.size(); ++i)
             fprintf(gp, "%f %f\n", time[i], y_fuzzy_vec[i]);
+        fprintf(gp, "e\n");
+
+        // SMC Output
+        for (size_t i = 0; i < time.size(); ++i)
+            fprintf(gp, "%f %f\n", time[i], y_smc_vec[i]);
         fprintf(gp, "e\n");
 
         fflush(gp);
