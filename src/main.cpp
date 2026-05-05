@@ -102,6 +102,13 @@ int main(int argc, char *argv[])
     std::cout << "=== Start ===" << std::endl;
 
     /*===========================================================================*
+     * Simulation parameters
+     *===========================================================================*/
+    double dt = 0.01;
+    double simulation_time = 5.0;
+    // double setpoint = 1.0;
+
+    /*===========================================================================*
      * Gnuplot setup
      *===========================================================================*/
     // Open a pipe to gnuplot
@@ -118,6 +125,10 @@ int main(int argc, char *argv[])
     fprintf(gp, "set ylabel 'Value'\n");
     fprintf(gp, "set grid\n");
 
+    // Set fixed y-range for better visualization (adjust as needed)
+    fprintf(gp, "set yrange [-0.1:1.3]\n");
+    fprintf(gp, "set xrange [0:%f]\n", simulation_time);
+
     /*===========================================================================*
      * Logging setup
      *===========================================================================*/
@@ -130,7 +141,7 @@ int main(int argc, char *argv[])
     logger.addSink(&fileLogger);
 
     // Header CSV output
-    LOG_INFO(&logger, "time,setpoint,output,control_signal");
+    LOG_INFO(&logger, "time,setpoint,y_pid,y_fuzzy,y_smc,u_pid");
 
     /*===========================================================================*
      * Terminal setup for non-blocking input
@@ -151,27 +162,25 @@ int main(int argc, char *argv[])
     bool exit_requested = false;
 
     /*===========================================================================*
-     * Simulation parameters
-     *===========================================================================*/
-    double dt = 0.01;
-    double simulation_time = 5.0;
-    double setpoint = 1.0;
-
-    /*===========================================================================*
      * Plant setup
      *===========================================================================*/
     // FirstOrderPlant plant(1.0, 1.0);         // Plant: K=1, tau=1
-    SecondOrderPlant plant_pid(1.0, 4.0, 0.3);   // Plant: K=1, omega_n=4, psi=0.3 (underdamped)
-    SecondOrderPlant plant_fuzzy(1.0, 4.0, 0.3); // Plant: K=1, omega_n=4, psi=0.3 (underdamped)
-    SecondOrderPlant plant_smc(1.0, 4.0, 0.3);   // Plant: K=1, omega_n=4, psi=0.3 (underdamped)
+    // SecondOrderPlant plant_pid(1.0, 4.0, 0.3);   // Plant: K=1, omega_n=4, psi=0.3 (underdamped)
+    // SecondOrderPlant plant_fuzzy(1.0, 4.0, 0.3); // Plant: K=1, omega_n=4, psi=0.3 (underdamped)
+    // SecondOrderPlant plant_smc(1.0, 4.0, 0.3);   // Plant: K=1, omega_n=4, psi=0.3 (underdamped)
+    // More realistic brake plant: overdamped, ω_n~3, ψ~1.2
+    SecondOrderPlant plant_pid(1.0, 3.0, 1.2);
+    SecondOrderPlant plant_fuzzy(1.0, 3.0, 1.2);
+    SecondOrderPlant plant_smc(1.0, 3.0, 1.2);
 
     /*===========================================================================*
      * PID Controller setup
      *===========================================================================*/
-    double kp = 2.0;
-    double ki = 1.0;
-    double kd = 0.1;
-    PIDController pid(kp, ki, kd, -10, 10); // PID: Kp=2, Ki=1, Kd=0.1, output limits [-10, 10]
+    double kp = 10.0;
+    double ki = 3.0;
+    double kd = 0.8;
+    // Brakes only push, never pull — clamp the control output to positive only
+    PIDController pid(kp, ki, kd, 0, 10); // PID: Kp=10, Ki=3.0, Kd=0.8, output limits [0, 10]
     double y_pid = 0.0;
 
     /*===========================================================================*
@@ -198,7 +207,7 @@ int main(int argc, char *argv[])
     control.addFuzzySet("NS", std::make_shared<TriangularMembershipFunction>( -5.0, -2.5,  0.0));
     control.addFuzzySet("ZE", std::make_shared<TriangularMembershipFunction>( -1.0,  0.0,  1.0));
     control.addFuzzySet("PS", std::make_shared<TriangularMembershipFunction>(  0.0,  2.5,  5.0));
-    control.addFuzzySet("PB", std::make_shared<TriangularMembershipFunction>(  3.0,  7.0, 10.0));
+    control.addFuzzySet("PB", std::make_shared<TriangularMembershipFunction>(  5.0,  10.0, 10.0));
 
     // Create fuzzy inference engine and add rules
     InferenceEngine engine;
@@ -227,14 +236,14 @@ int main(int argc, char *argv[])
     Defuzzifier defuzz;
 
     double y_fuzzy = 0.0;
-    double prev_error = 0.0;
+    double prev_error_fuzzy = 0.0;
 
     /*===========================================================================*
      * SMC Controller setup
      *===========================================================================*/
     double kp_smc = 5.0; // Gain for sliding mode control
-    double epsilon_smc = 0.1; // Boundary layer thickness for tanh approximation
     double y_smc = 0.0;
+    double prev_error_smc = 0.0;
     
     /*===========================================================================*
      * Buffers (sliding window) for plotting
@@ -272,6 +281,16 @@ int main(int argc, char *argv[])
         }
 
         /*===========================================================================*
+         * Update setpoint (simulate driver pressing/releasing brake pedal)
+         *===========================================================================*/
+        double setpoint;
+        if      (t < 0.5)  setpoint = 0.0;           // no braking
+        else if (t < 1.5)  setpoint = t - 0.5;       // ramp up (driver pressing)
+        else if (t < 3.0)  setpoint = 1.0;           // full brake hold
+        else if (t < 4.0)  setpoint = 1.0 - (t-3.0);// ramp down (driver releasing)
+        else               setpoint = 0.0;           // released
+
+        /*===========================================================================*
          * Compute PID control signal and update plant
          *===========================================================================*/
         double error_pid = setpoint - y_pid;
@@ -282,24 +301,28 @@ int main(int argc, char *argv[])
         * Fuzzy control signal and update plant
         *===========================================================================*/
         double error_fuzzy = setpoint - y_fuzzy;
-        double de_norm     = std::max(-1.0, std::min(1.0, (error_fuzzy - prev_error) / (dt * 8.0)));
-        prev_error         = error_fuzzy;
+        double de_norm     = std::max(-1.0, std::min(1.0, (error_fuzzy - prev_error_fuzzy) / (dt * 10.0))); // Normalize by max expected rate (10.0) and clamp to [-1, 1]
+        prev_error_fuzzy   = error_fuzzy;
 
         auto outputs = engine.infer({
             {"error",   error.fuzzify(error_fuzzy)},
             {"d_error", d_error.fuzzify(de_norm)}
         });
 
-        y_fuzzy = plant_fuzzy.update(defuzz.defuzzify(outputs["control"], control), dt);
+        double u_fuzzy = defuzz.defuzzify(outputs["control"], control);
+        y_fuzzy = plant_fuzzy.update(std::max(0.0, u_fuzzy), dt);
 
         /*===========================================================================*
          * SMC control signal
          *===========================================================================*/
         // Sliding surface: s = error + lambda * d_error
         double error_smc = setpoint - y_smc;
-        double lambda = 5; // Tuning parameter for sliding surface
-        double s      = error_smc + lambda * (error_smc - prev_error) / dt;
-        double u_smc = std::clamp(kp_smc * tanh((s > 0.0 ? 1.0 : -1.0)/epsilon_smc), -10.0, 10.0);
+        double lambda = 0.2; // Tuning parameter for sliding surface
+        double s      = error_smc + lambda * (error_smc - prev_error_smc) / dt;
+        prev_error_smc = error_smc;
+
+        // Only apply braking force, never negative
+        double u_smc = std::clamp(kp_smc * (s > 0.0 ? 1.0 : -1.0), 0.0, 10.0);
 
         y_smc = plant_smc.update(u_smc, dt);
 
@@ -357,10 +380,12 @@ int main(int argc, char *argv[])
          *===========================================================================*/
         // CSV output
         LOG_INFO(&logger,
-                 std::to_string(t) + "," +
-                     std::to_string(setpoint) + "," +
-                     std::to_string(y_pid) + "," +
-                     std::to_string(u_pid));
+                std::to_string(t)        + "," +
+                std::to_string(setpoint) + "," +
+                std::to_string(y_pid)    + "," +
+                std::to_string(y_fuzzy)  + "," +
+                std::to_string(y_smc)    + "," +
+                std::to_string(u_pid));
 
         // Debug output
         LOG_DEBUG(&logger,
