@@ -293,7 +293,6 @@ int main(int argc, char *argv[])
         /*===========================================================================*
          * Compute PID control signal and update plant
          *===========================================================================*/
-        double error_pid = setpoint - y_pid;
         double u_pid = pid.compute(setpoint, y_pid, dt);
         y_pid = plant_pid.update(u_pid, dt);
 
