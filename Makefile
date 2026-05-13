@@ -25,7 +25,7 @@ endif
 # EDIT ONLY HERE!!!!!!!!!!!
 # ===============================
 SRC_DIRS  = src utils \
-			src/app/cli \
+			src/app/simulation \
 			src/plant \
 			src/plant/models \
 			src/controller \

@@ -51,6 +51,8 @@
 #include "logger_sink_stdout.h"
 #include "logger_sink_file.h"
 
+#include "smc_simulation.h"
+
 /*===========================================================================*
  * Local Preprocessor #define Constants
  *===========================================================================*/
@@ -255,8 +257,9 @@ int main(int argc, char *argv[])
      * SMC Controller setup
      *===========================================================================*/
     double kp_smc = 5.0; // Gain for sliding mode control
+    double lambda = 0.2; // Tuning parameter for sliding surface
     double y_smc = 0.0;
-    double prev_error_smc = 0.0;
+    SMCSimulation smc_sim(plant_smc, kp_smc, lambda);
 
     /*===========================================================================*
      * Buffers (sliding window) for plotting
@@ -330,16 +333,7 @@ int main(int argc, char *argv[])
         /*===========================================================================*
          * SMC control signal
          *===========================================================================*/
-        // Sliding surface: s = error + lambda * d_error
-        double error_smc = setpoint - y_smc;
-        double lambda = 0.2; // Tuning parameter for sliding surface
-        double s = error_smc + lambda * (error_smc - prev_error_smc) / dt;
-        prev_error_smc = error_smc;
-
-        // Only apply braking force, never negative
-        double u_smc = std::clamp(kp_smc * (s > 0.0 ? 1.0 : -1.0), 0.0, 10.0);
-
-        y_smc = plant_smc.update(u_smc, dt);
+        y_smc = smc_sim.update(setpoint, dt);
 
         /*===========================================================================*
          * Plotting
