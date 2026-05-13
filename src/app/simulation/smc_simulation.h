@@ -1,16 +1,18 @@
 #pragma once
 
+#include <memory>
+
 #include "FirstOrderPlant.h"
 #include "SecondOrderPlant.h"
 
 class SMCSimulation
 {
 public:
-    SMCSimulation(SecondOrderPlant plant, double kp, double lambda);
+    SMCSimulation(std::shared_ptr<IPlant> plant, double kp, double lambda);
     double update(double setpoint, double dt);
 
 private:
-    SecondOrderPlant plant;
+    std::shared_ptr<IPlant> plant;
 
     double kp;
     double lambda;

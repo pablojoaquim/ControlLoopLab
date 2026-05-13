@@ -30,8 +30,8 @@
  * @param[in]  kp      Proportional gain for SMC
  * @param[in]  lambda  Tuning parameter for sliding surface
  *****************************************************************************/
-SMCSimulation::SMCSimulation(SecondOrderPlant plant, double kp, double lambda)
-: plant(plant), kp(kp), lambda(lambda), y(0.0), prev_error(0.0)
+SMCSimulation::SMCSimulation(std::shared_ptr<IPlant> plant, double kp, double lambda)
+: plant(std::move(plant)), kp(kp), lambda(lambda), y(0.0), prev_error(0.0)
 {
 }
 
@@ -63,6 +63,6 @@ double SMCSimulation::update(double setpoint, double dt)
     /*===========================================================================*
      * Plant update
      *===========================================================================*/
-    y = plant.update(u, dt);
+    y = plant->update(u, dt);
     return y;
 }

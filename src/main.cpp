@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
     // More realistic brake plant: overdamped, ω_n~3, ψ~1.2
     SecondOrderPlant plant_pid(1.0, 3.0, 1.2);
     SecondOrderPlant plant_fuzzy(1.0, 3.0, 1.2);
-    SecondOrderPlant plant_smc(1.0, 3.0, 1.2);
+    std::shared_ptr<IPlant> plant_smc = std::make_shared<SecondOrderPlant>(1.0, 3.0, 1.2);
 
     /*===========================================================================*
      * PID Controller setup
