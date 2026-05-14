@@ -53,6 +53,7 @@
 
 #include "smc_simulation.h"
 #include "pid_simulation.h"
+#include "fuzzy_simulation.h"
 
 /*===========================================================================*
  * Local Preprocessor #define Constants
@@ -174,7 +175,8 @@ int main(int argc, char *argv[])
     // SecondOrderPlant plant_fuzzy(1.0, 4.0, 0.3); // Plant: K=1, omega_n=4, psi=0.3 (underdamped)
     // SecondOrderPlant plant_smc(1.0, 4.0, 0.3);   // Plant: K=1, omega_n=4, psi=0.3 (underdamped)
     // More realistic brake plant: overdamped, ω_n~3, ψ~1.2
-    SecondOrderPlant plant_fuzzy(1.0, 3.0, 1.2);
+    // SecondOrderPlant plant_fuzzy(1.0, 3.0, 1.2);
+    std::shared_ptr<IPlant> plant_fuzzy = std::make_shared<SecondOrderPlant>(1.0, 3.0, 1.2);
     std::shared_ptr<IPlant> plant_pid = std::make_shared<SecondOrderPlant>(1.0, 3.0, 1.2);
     std::shared_ptr<IPlant> plant_smc = std::make_shared<SecondOrderPlant>(1.0, 3.0, 1.2);
 
@@ -188,70 +190,73 @@ int main(int argc, char *argv[])
     /*===========================================================================*
      * Fuzzy Controller setup
      *===========================================================================*/
-    // Error: setpoint is 1.0, max expected error at startup = 1.0
-    LinguisticVariable error("error", -1.5, 1.5);
-    error.addFuzzySet("NegativeBig", std::make_shared<TriangularMembershipFunction>(-1.5, -1.0, -0.5));
-    error.addFuzzySet("NegativeSmall", std::make_shared<TriangularMembershipFunction>(-1.0, -0.5, 0.0));
-    error.addFuzzySet("Zero", std::make_shared<TriangularMembershipFunction>(-0.3, 0.0, 0.3));
-    error.addFuzzySet("PositiveSmall", std::make_shared<TriangularMembershipFunction>(0.0, 0.5, 1.0));
-    error.addFuzzySet("PositiveBig", std::make_shared<TriangularMembershipFunction>(0.5, 1.0, 1.5));
+    // // Error: setpoint is 1.0, max expected error at startup = 1.0
+    // LinguisticVariable error("error", -1.5, 1.5);
+    // error.addFuzzySet("NegativeBig", std::make_shared<TriangularMembershipFunction>(-1.5, -1.0, -0.5));
+    // error.addFuzzySet("NegativeSmall", std::make_shared<TriangularMembershipFunction>(-1.0, -0.5, 0.0));
+    // error.addFuzzySet("Zero", std::make_shared<TriangularMembershipFunction>(-0.3, 0.0, 0.3));
+    // error.addFuzzySet("PositiveSmall", std::make_shared<TriangularMembershipFunction>(0.0, 0.5, 1.0));
+    // error.addFuzzySet("PositiveBig", std::make_shared<TriangularMembershipFunction>(0.5, 1.0, 1.5));
 
-    LinguisticVariable d_error("d_error", -1.0, 1.0);
-    d_error.addFuzzySet("Negative", std::make_shared<TriangularMembershipFunction>(-1.0, -0.5, 0.0));
-    d_error.addFuzzySet("Zero", std::make_shared<TriangularMembershipFunction>(-0.3, 0.0, 0.3));
-    d_error.addFuzzySet("Positive", std::make_shared<TriangularMembershipFunction>(0.0, 0.5, 1.0));
+    // LinguisticVariable d_error("d_error", -1.0, 1.0);
+    // d_error.addFuzzySet("Negative", std::make_shared<TriangularMembershipFunction>(-1.0, -0.5, 0.0));
+    // d_error.addFuzzySet("Zero", std::make_shared<TriangularMembershipFunction>(-0.3, 0.0, 0.3));
+    // d_error.addFuzzySet("Positive", std::make_shared<TriangularMembershipFunction>(0.0, 0.5, 1.0));
 
-    LinguisticVariable control("control", -10.0, 10.0);
-    control.addFuzzySet("NegativeBig", std::make_shared<TriangularMembershipFunction>(-10.0, -7.0, -3.0));
-    control.addFuzzySet("NegativeSmall", std::make_shared<TriangularMembershipFunction>(-5.0, -2.5, 0.0));
-    control.addFuzzySet("Zero", std::make_shared<TriangularMembershipFunction>(-1.0, 0.0, 1.0));
-    control.addFuzzySet("PositiveSmall", std::make_shared<TriangularMembershipFunction>(0.0, 2.5, 5.0));
-    control.addFuzzySet("PositiveBig", std::make_shared<TriangularMembershipFunction>(5.0, 10.0, 10.0));
+    // LinguisticVariable control("control", -10.0, 10.0);
+    // control.addFuzzySet("NegativeBig", std::make_shared<TriangularMembershipFunction>(-10.0, -7.0, -3.0));
+    // control.addFuzzySet("NegativeSmall", std::make_shared<TriangularMembershipFunction>(-5.0, -2.5, 0.0));
+    // control.addFuzzySet("Zero", std::make_shared<TriangularMembershipFunction>(-1.0, 0.0, 1.0));
+    // control.addFuzzySet("PositiveSmall", std::make_shared<TriangularMembershipFunction>(0.0, 2.5, 5.0));
+    // control.addFuzzySet("PositiveBig", std::make_shared<TriangularMembershipFunction>(5.0, 10.0, 10.0));
 
-    // Create fuzzy inference engine and add rules
-    InferenceEngine engine;
+    // // Create fuzzy inference engine and add rules
+    // InferenceEngine engine;
 
-    // Fuzzy rules based on typical control logic for braking:
-    // If error is PositiveBig (far from setpoint) and d_error is Negative (approaching), apply PositiveSmall control
-    // If error is PositiveBig and d_error is Zero, apply PositiveBig control
-    // If error is PositiveBig and d_error is Positive (moving away), apply PositiveBig control
-    engine.addRule(FuzzyRule({{"error", "PositiveBig"}, {"d_error", "Negative"}}, {"control", "PositiveSmall"}));
-    engine.addRule(FuzzyRule({{"error", "PositiveBig"}, {"d_error", "Zero"}}, {"control", "PositiveBig"}));
-    engine.addRule(FuzzyRule({{"error", "PositiveBig"}, {"d_error", "Positive"}}, {"control", "PositiveBig"}));
+    // // Fuzzy rules based on typical control logic for braking:
+    // // If error is PositiveBig (far from setpoint) and d_error is Negative (approaching), apply PositiveSmall control
+    // // If error is PositiveBig and d_error is Zero, apply PositiveBig control
+    // // If error is PositiveBig and d_error is Positive (moving away), apply PositiveBig control
+    // engine.addRule(FuzzyRule({{"error", "PositiveBig"}, {"d_error", "Negative"}}, {"control", "PositiveSmall"}));
+    // engine.addRule(FuzzyRule({{"error", "PositiveBig"}, {"d_error", "Zero"}}, {"control", "PositiveBig"}));
+    // engine.addRule(FuzzyRule({{"error", "PositiveBig"}, {"d_error", "Positive"}}, {"control", "PositiveBig"}));
     
-    // If error is PositiveSmall and d_error is Negative, apply Zero control (already approaching, no need to increase)
-    // If error is PositiveSmall and d_error is Zero, apply PositiveSmall control (still need to increase a bit)
-    // If error is PositiveSmall and d_error is Positive, apply PositiveBig control (moving away, need more braking)
-    engine.addRule(FuzzyRule({{"error", "PositiveSmall"}, {"d_error", "Negative"}}, {"control", "Zero"}));
-    engine.addRule(FuzzyRule({{"error", "PositiveSmall"}, {"d_error", "Zero"}}, {"control", "PositiveSmall"}));
-    engine.addRule(FuzzyRule({{"error", "PositiveSmall"}, {"d_error", "Positive"}}, {"control", "PositiveBig"}));
+    // // If error is PositiveSmall and d_error is Negative, apply Zero control (already approaching, no need to increase)
+    // // If error is PositiveSmall and d_error is Zero, apply PositiveSmall control (still need to increase a bit)
+    // // If error is PositiveSmall and d_error is Positive, apply PositiveBig control (moving away, need more braking)
+    // engine.addRule(FuzzyRule({{"error", "PositiveSmall"}, {"d_error", "Negative"}}, {"control", "Zero"}));
+    // engine.addRule(FuzzyRule({{"error", "PositiveSmall"}, {"d_error", "Zero"}}, {"control", "PositiveSmall"}));
+    // engine.addRule(FuzzyRule({{"error", "PositiveSmall"}, {"d_error", "Positive"}}, {"control", "PositiveBig"}));
     
-    // If error is Zero and d_error is Negative, apply NegativeSmall control (already at setpoint but approaching, may need to reduce braking)
-    // If error is Zero and d_error is Zero, apply Zero control (at setpoint, no change)
-    // If error is Zero and d_error is Positive, apply PositiveSmall control (at setpoint but moving away, may need to increase braking)
-    engine.addRule(FuzzyRule({{"error", "Zero"}, {"d_error", "Negative"}}, {"control", "NegativeSmall"}));
-    engine.addRule(FuzzyRule({{"error", "Zero"}, {"d_error", "Zero"}}, {"control", "Zero"}));
-    engine.addRule(FuzzyRule({{"error", "Zero"}, {"d_error", "Positive"}}, {"control", "PositiveSmall"}));
+    // // If error is Zero and d_error is Negative, apply NegativeSmall control (already at setpoint but approaching, may need to reduce braking)
+    // // If error is Zero and d_error is Zero, apply Zero control (at setpoint, no change)
+    // // If error is Zero and d_error is Positive, apply PositiveSmall control (at setpoint but moving away, may need to increase braking)
+    // engine.addRule(FuzzyRule({{"error", "Zero"}, {"d_error", "Negative"}}, {"control", "NegativeSmall"}));
+    // engine.addRule(FuzzyRule({{"error", "Zero"}, {"d_error", "Zero"}}, {"control", "Zero"}));
+    // engine.addRule(FuzzyRule({{"error", "Zero"}, {"d_error", "Positive"}}, {"control", "PositiveSmall"}));
     
-    // If error is NegativeSmall and d_error is Negative, apply NegativeBig control (far from setpoint but approaching, may need to reduce braking significantly)
-    // If error is NegativeSmall and d_error is Zero, apply NegativeSmall control (close to setpoint, no change or slight reduction)
-    // If error is NegativeSmall and d_error is Positive, apply Zero control (close to setpoint but moving away, may need to increase braking)
-    engine.addRule(FuzzyRule({{"error", "NegativeSmall"}, {"d_error", "Negative"}}, {"control", "NegativeBig"}));
-    engine.addRule(FuzzyRule({{"error", "NegativeSmall"}, {"d_error", "Zero"}}, {"control", "NegativeSmall"}));
-    engine.addRule(FuzzyRule({{"error", "NegativeSmall"}, {"d_error", "Positive"}}, {"control", "Zero"}));
+    // // If error is NegativeSmall and d_error is Negative, apply NegativeBig control (far from setpoint but approaching, may need to reduce braking significantly)
+    // // If error is NegativeSmall and d_error is Zero, apply NegativeSmall control (close to setpoint, no change or slight reduction)
+    // // If error is NegativeSmall and d_error is Positive, apply Zero control (close to setpoint but moving away, may need to increase braking)
+    // engine.addRule(FuzzyRule({{"error", "NegativeSmall"}, {"d_error", "Negative"}}, {"control", "NegativeBig"}));
+    // engine.addRule(FuzzyRule({{"error", "NegativeSmall"}, {"d_error", "Zero"}}, {"control", "NegativeSmall"}));
+    // engine.addRule(FuzzyRule({{"error", "NegativeSmall"}, {"d_error", "Positive"}}, {"control", "Zero"}));
     
-    // If error is NegativeBig and d_error is Negative, apply NegativeBig control (far from setpoint but approaching, may need to reduce braking significantly)
-    // If error is NegativeBig and d_error is Zero, apply NegativeBig control (far from setpoint, no change)
-    // If error is NegativeBig and d_error is Positive, apply NegativeSmall control (far from setpoint and moving away, may need to reduce braking but not as much since it's already far)
-    engine.addRule(FuzzyRule({{"error", "NegativeBig"}, {"d_error", "Negative"}}, {"control", "NegativeBig"}));
-    engine.addRule(FuzzyRule({{"error", "NegativeBig"}, {"d_error", "Zero"}}, {"control", "NegativeBig"}));
-    engine.addRule(FuzzyRule({{"error", "NegativeBig"}, {"d_error", "Positive"}}, {"control", "NegativeSmall"}));
+    // // If error is NegativeBig and d_error is Negative, apply NegativeBig control (far from setpoint but approaching, may need to reduce braking significantly)
+    // // If error is NegativeBig and d_error is Zero, apply NegativeBig control (far from setpoint, no change)
+    // // If error is NegativeBig and d_error is Positive, apply NegativeSmall control (far from setpoint and moving away, may need to reduce braking but not as much since it's already far)
+    // engine.addRule(FuzzyRule({{"error", "NegativeBig"}, {"d_error", "Negative"}}, {"control", "NegativeBig"}));
+    // engine.addRule(FuzzyRule({{"error", "NegativeBig"}, {"d_error", "Zero"}}, {"control", "NegativeBig"}));
+    // engine.addRule(FuzzyRule({{"error", "NegativeBig"}, {"d_error", "Positive"}}, {"control", "NegativeSmall"}));
 
-    // Create fuzzy controller
-    Defuzzifier defuzz;
+    // // Create fuzzy controller
+    // Defuzzifier defuzz;
 
     double y_fuzzy = 0.0;
-    double prev_error_fuzzy = 0.0;
+    // double prev_error_fuzzy = 0.0;
+
+    // Create the Fuzzy simulation instance, which owns the plant and maintains the control state
+    FuzzySimulation fuzzy_sim(plant_fuzzy, output_min, output_max);
 
     /*===========================================================================*
      * SMC Controller setup
@@ -318,15 +323,16 @@ int main(int argc, char *argv[])
         /*===========================================================================*
          * Fuzzy control signal and update plant
          *===========================================================================*/
-        double error_fuzzy = setpoint - y_fuzzy;
-        double de_norm = std::max(-1.0, std::min(1.0, (error_fuzzy - prev_error_fuzzy) / (dt * 10.0))); // Normalize by max expected rate (10.0) and clamp to [-1, 1]
-        prev_error_fuzzy = error_fuzzy;
+        y_fuzzy = fuzzy_sim.update(setpoint, dt);
+        // double error_fuzzy = setpoint - y_fuzzy;
+        // double de_norm = std::max(-1.0, std::min(1.0, (error_fuzzy - prev_error_fuzzy) / (dt * 10.0))); // Normalize by max expected rate (10.0) and clamp to [-1, 1]
+        // prev_error_fuzzy = error_fuzzy;
 
-        auto outputs = engine.infer({{"error", error.fuzzify(error_fuzzy)},
-                                     {"d_error", d_error.fuzzify(de_norm)}});
+        // auto outputs = engine.infer({{"error", error.fuzzify(error_fuzzy)},
+        //                              {"d_error", d_error.fuzzify(de_norm)}});
 
-        double u_fuzzy = defuzz.defuzzify(outputs["control"], control);
-        y_fuzzy = plant_fuzzy.update(std::max(0.0, u_fuzzy), dt);
+        // double u_fuzzy = defuzz.defuzzify(outputs["control"], control);
+        // y_fuzzy = plant_fuzzy.update(std::max(0.0, u_fuzzy), dt);
 
         /*===========================================================================*
          * SMC control signal and update plant

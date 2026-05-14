@@ -70,7 +70,7 @@
  *              the output state and previous error.
  *****************************************************************************/
 PIDSimulation::PIDSimulation(std::shared_ptr<IPlant> plant, double output_min, double output_max)
-    : plant_(plant), y_(0.0), pid_(1.0, 0.0, 0.0, output_min, output_max)
+    : plant_(plant), pid_(1.0, 0.0, 0.0, output_min, output_max), y_(0.0)
 {
     // Configure the PID controller with the simulation parameters
     double kp = 10.0;
