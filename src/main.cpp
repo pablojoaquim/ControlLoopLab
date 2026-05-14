@@ -52,6 +52,7 @@
 #include "logger_sink_file.h"
 
 #include "smc_simulation.h"
+#include "pid_simulation.h"
 
 /*===========================================================================*
  * Local Preprocessor #define Constants
@@ -171,8 +172,8 @@ int main(int argc, char *argv[])
     // SecondOrderPlant plant_fuzzy(1.0, 4.0, 0.3); // Plant: K=1, omega_n=4, psi=0.3 (underdamped)
     // SecondOrderPlant plant_smc(1.0, 4.0, 0.3);   // Plant: K=1, omega_n=4, psi=0.3 (underdamped)
     // More realistic brake plant: overdamped, ω_n~3, ψ~1.2
-    SecondOrderPlant plant_pid(1.0, 3.0, 1.2);
     SecondOrderPlant plant_fuzzy(1.0, 3.0, 1.2);
+    std::shared_ptr<IPlant> plant_pid = std::make_shared<SecondOrderPlant>(1.0, 3.0, 1.2);
     std::shared_ptr<IPlant> plant_smc = std::make_shared<SecondOrderPlant>(1.0, 3.0, 1.2);
 
     /*===========================================================================*
@@ -181,9 +182,13 @@ int main(int argc, char *argv[])
     double kp = 10.0;
     double ki = 3.0;
     double kd = 0.8;
-    // Brakes only push, never pull — clamp the control output to positive only
-    PIDController pid(kp, ki, kd, 0, 10); // PID: Kp=10, Ki=3.0, Kd=0.8, output limits [0, 10]
+    double output_min = 0.0;    // Minimum control output (e.g. no braking)
+    double output_max = 10.0;   // Maximum control output (e.g. full braking)
     double y_pid = 0.0;
+    // PIDController pid(kp, ki, kd, 0, 10); // PID: Kp=10, Ki=3.0, Kd=0.8, output limits [0, 10]
+
+    // Create the PID simulation instance, which owns the plant and maintains the control state
+    PIDSimulation pid_sim(plant_pid, kp, ki, kd, output_min, output_max);
 
     /*===========================================================================*
      * Fuzzy Controller setup
@@ -315,8 +320,7 @@ int main(int argc, char *argv[])
         /*===========================================================================*
          * Compute PID control signal and update plant
          *===========================================================================*/
-        double u_pid = pid.compute(setpoint, y_pid, dt);
-        y_pid = plant_pid.update(u_pid, dt);
+        y_pid = pid_sim.update(setpoint, dt);
 
         /*===========================================================================*
          * Fuzzy control signal and update plant
@@ -395,13 +399,13 @@ int main(int argc, char *argv[])
                      std::to_string(y_pid) + "," +
                      std::to_string(y_fuzzy) + "," +
                      std::to_string(y_smc) + "," +
-                     std::to_string(u_pid));
+                     std::to_string(std::max(0.0, u_fuzzy)));
 
         // Debug output
         LOG_DEBUG(&logger,
                   "t=" + std::to_string(t) + "," +
                       " y=" + std::to_string(y_pid) + "," +
-                      " u=" + std::to_string(u_pid));
+                      " u=" + std::to_string(std::max(0.0, u_fuzzy)));
 
         // Sleep for a short time to simulate real-time and allow gnuplot to update
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
