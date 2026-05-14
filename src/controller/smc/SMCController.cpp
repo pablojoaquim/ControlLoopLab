@@ -86,7 +86,7 @@ double SMCController::compute(double setpoint,
     double u = kp_ * (s > 0.0 ? 1.0 : -1.0);
 
     /* Output saturation */
-    // double u_sat = std::clamp(u, u_min_, u_max_);
+    u = std::clamp(u, u_min_, u_max_);
 
     return u;
 }
