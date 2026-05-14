@@ -69,12 +69,16 @@
  * Description  Stores the shared plant pointer and PID parameters, and zeroes
  *              the output state and previous error.
  *****************************************************************************/
-PIDSimulation::PIDSimulation(std::shared_ptr<IPlant> plant, double kp, double ki, double kd, double output_min, double output_max)
-    : plant_(std::move(plant)),
-      y_(0.0),
-      prev_error_(0.0),
-      pid_(kp, ki, kd, output_min, output_max)
+PIDSimulation::PIDSimulation(std::shared_ptr<IPlant> plant, double output_min, double output_max)
+    : plant_(plant), y_(0.0), pid_(1.0, 0.0, 0.0, output_min, output_max)
 {
+    // Configure the PID controller with the simulation parameters
+    double kp = 10.0;
+    double ki = 3.0;
+    double kd = 0.8;
+    pid_.setKd(kd);
+    pid_.setKi(ki);
+    pid_.setKp(kp);
 }
 
 /*****************************************************************************

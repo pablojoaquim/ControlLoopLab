@@ -181,15 +181,9 @@ int main(int argc, char *argv[])
     /*===========================================================================*
      * PID Controller setup
      *===========================================================================*/
-    double kp = 10.0;
-    double ki = 3.0;
-    double kd = 0.8;
-
     double y_pid = 0.0;
-    // PIDController pid(kp, ki, kd, 0, 10); // PID: Kp=10, Ki=3.0, Kd=0.8, output limits [0, 10]
-
     // Create the PID simulation instance, which owns the plant and maintains the control state
-    PIDSimulation pid_sim(plant_pid, kp, ki, kd, output_min, output_max);
+    PIDSimulation pid_sim(plant_pid, output_min, output_max);
 
     /*===========================================================================*
      * Fuzzy Controller setup
@@ -262,11 +256,9 @@ int main(int argc, char *argv[])
     /*===========================================================================*
      * SMC Controller setup
      *===========================================================================*/
-    double kp_smc = 5.0; // Gain for sliding mode control
-    double lambda = 0.2; // Tuning parameter for sliding surface
     double y_smc = 0.0;
     // Create the SMC simulation instance, which owns the plant and maintains the control state
-    SMCSimulation smc_sim(plant_smc, kp_smc, lambda, output_min, output_max);
+    SMCSimulation smc_sim(plant_smc, output_min, output_max);
 
     /*===========================================================================*
      * Buffers (sliding window) for plotting

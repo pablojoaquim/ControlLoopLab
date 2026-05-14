@@ -45,14 +45,17 @@
  *              and initializes the simulated plant output to zero.
  *****************************************************************************/
 SMCSimulation::SMCSimulation(std::shared_ptr<IPlant> plant,
-                             double kp,
-                             double lambda,
                              double output_min,
                              double output_max)
     : plant_(std::move(plant)),
-      controller_(kp, lambda, output_min, output_max),
+      smc_(1.0, 1.0, output_min, output_max),
       y_(0.0)
 {
+    // Configure the SMC controller with the simulation parameters
+    double kp = 5.0;        // Gain for sliding mode control
+    double lambda = 0.2;    // Tuning parameter for sliding surface
+    smc_.setKp(kp);
+    smc_.setLambda(lambda);
 }
 
 /*****************************************************************************
@@ -68,7 +71,7 @@ double SMCSimulation::update(double setpoint, double dt)
      * Controller evaluation
      *===========================================================================*/
     double measurement = y_; // Current plant output is the measurement for the controller
-    double u = controller_.compute(setpoint, measurement, dt);
+    double u = smc_.compute(setpoint, measurement, dt);
 
     /*===========================================================================*
      * Plant update

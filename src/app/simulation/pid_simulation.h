@@ -68,13 +68,10 @@ public:
      * @fn         PIDSimulation
      * @brief      Constructs the simulation with a plant and PID parameters.
      * @param[in]  plant   Shared pointer to the plant model to control.
-     * @param[in]  kp      Proportional gain.
-     * @param[in]  ki      Integral gain.
-     * @param[in]  kd      Derivative gain.
      * @param[in]  output_min  Minimum allowed control output.
      * @param[in]  output_max  Maximum allowed control output.
      ******************************************************************************/
-    PIDSimulation(std::shared_ptr<IPlant> plant, double kp, double ki, double kd, double output_min, double output_max);
+    PIDSimulation(std::shared_ptr<IPlant> plant, double output_min, double output_max);
 
     /*****************************************************************************
      * @fn         update
@@ -87,11 +84,8 @@ public:
 
 private:
     std::shared_ptr<IPlant> plant_;     /**< Controlled plant model.               */
-
-    double y_;                          /**< Current plant output.                 */
-    double prev_error_;                 /**< Error value from the previous step.   */
-
     PIDController pid_;                 /**< PID controller instance.              */
+    double y_;                          /**< Current plant output.                 */
 };
 
 #endif /* __cplusplus */

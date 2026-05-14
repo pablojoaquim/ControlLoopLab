@@ -78,14 +78,10 @@ public:
      * @fn         SMCSimulation
      * @brief      Constructs the simulation with a plant and SMC parameters.
      * @param[in]  plant       Shared pointer to the controlled plant model.
-     * @param[in]  kp          Switching gain.
-     * @param[in]  lambda      Sliding surface coefficient.
      * @param[in]  output_min  Minimum allowable controller output.
      * @param[in]  output_max  Maximum allowable controller output.
      ******************************************************************************/
     SMCSimulation(std::shared_ptr<IPlant> plant,
-                  double kp,
-                  double lambda,
                   double output_min,
                   double output_max);
 
@@ -100,9 +96,7 @@ public:
 
 private:
     std::shared_ptr<IPlant> plant_; /**< Controlled plant model. */
-
-    SMCController controller_;      /**< Encapsulated SMC controller. */
-
+    SMCController smc_;             /**< Encapsulated SMC controller. */
     double y_;                      /**< Current plant output. */
 };
 
