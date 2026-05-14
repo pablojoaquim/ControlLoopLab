@@ -146,7 +146,7 @@ int main(int argc, char *argv[])
     logger.addSink(&fileLogger);
 
     // Header CSV output
-    LOG_INFO(&logger, "time,setpoint,y_pid,y_fuzzy,y_smc,u_pid");
+    LOG_INFO(&logger, "time,setpoint,y_pid,y_fuzzy,y_smc");
 
     /*===========================================================================*
      * Terminal setup for non-blocking input
@@ -399,14 +399,15 @@ int main(int argc, char *argv[])
                      std::to_string(setpoint) + "," +
                      std::to_string(y_pid) + "," +
                      std::to_string(y_fuzzy) + "," +
-                     std::to_string(y_smc) + "," +
-                     std::to_string(std::max(0.0, u_fuzzy)));
+                     std::to_string(y_smc));
 
         // Debug output
         LOG_DEBUG(&logger,
-                  "t=" + std::to_string(t) + "," +
-                      " y=" + std::to_string(y_pid) + "," +
-                      " u=" + std::to_string(std::max(0.0, u_fuzzy)));
+                  "t=" + std::to_string(t) +
+                      " setpoint=" + std::to_string(setpoint) +
+                      " y_pid=" + std::to_string(y_pid) +
+                      " y_fuzzy=" + std::to_string(y_fuzzy) +
+                      " y_smc=" + std::to_string(y_smc));
 
         // Sleep for a short time to simulate real-time and allow gnuplot to update
         std::this_thread::sleep_for(std::chrono::milliseconds(10));

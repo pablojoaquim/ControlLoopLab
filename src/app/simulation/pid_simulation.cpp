@@ -31,7 +31,6 @@
  * Header Files
  *===========================================================================*/
 #include "pid_simulation.h"
-#include <algorithm>
 
 /*===========================================================================*
  * Local Preprocessor #define Constants
