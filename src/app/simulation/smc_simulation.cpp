@@ -10,6 +10,9 @@
  * @section DESC DESCRIPTION:
  * Sliding Mode Controller (SMC) simulation wrapper implementation.
  *
+ * This module connects an IPlant implementation with an SMCController
+ * instance to perform closed-loop discrete-time simulation.
+ *
  * @section ABBR ABBREVIATIONS:
  *   - SMC  - Sliding Mode Controller
  *   - dt   - Discrete time step (s)
@@ -31,35 +34,6 @@
  * Header Files
  *===========================================================================*/
 #include "smc_simulation.h"
-#include <algorithm>
-
-/*===========================================================================*
- * Local Preprocessor #define Constants
- *===========================================================================*/
-
-/*===========================================================================*
- * Local Preprocessor #define MACROS
- *===========================================================================*/
-
-/*===========================================================================*
- * Local Type Declarations
- *===========================================================================*/
-
-/*===========================================================================*
- * Local Object Declarations
- *===========================================================================*/
-
-/*===========================================================================*
- * Local Variables Definitions
- *===========================================================================*/
-
-/*===========================================================================*
- * Local Function Prototypes
- *===========================================================================*/
-
-/*===========================================================================*
- * Local Inline Function Definitions and Function-Like Macros
- *===========================================================================*/
 
 /*===========================================================================*
  * Function Definitions
@@ -67,45 +41,39 @@
 
 /*****************************************************************************
  * Name         SMCSimulation::SMCSimulation
- * Description  Stores the shared plant pointer and SMC parameters, and zeroes
- *              the output state and previous error.
+ * Description  Stores the shared plant pointer, constructs the SMC controller,
+ *              and initializes the simulated plant output to zero.
  *****************************************************************************/
-SMCSimulation::SMCSimulation(std::shared_ptr<IPlant> plant, double kp, double lambda)
+SMCSimulation::SMCSimulation(std::shared_ptr<IPlant> plant,
+                             double kp,
+                             double lambda,
+                             double output_min,
+                             double output_max)
     : plant_(std::move(plant)),
-      kp_(kp),
-      lambda_(lambda),
-      y_(0.0),
-      prev_error_(0.0)
+      controller_(kp, lambda, output_min, output_max),
+      y_(0.0)
 {
 }
 
 /*****************************************************************************
  * Name         SMCSimulation::update
- * Description  Executes one closed-loop SMC step:
- *                1. Computes the tracking error and its finite-difference
- *                   derivative.
- *                2. Evaluates the sliding surface s = error + lambda * d_error.
- *                3. Applies the sliding mode control law u = kp * sign(s).
- *                4. Advances the plant by one dt step and returns the output.
+ * Description  Executes one closed-loop simulation step:
+ *                1. Computes the control action using the SMC controller.
+ *                2. Advances the plant model by one discrete time step.
+ *                3. Returns the updated plant output.
  *****************************************************************************/
 double SMCSimulation::update(double setpoint, double dt)
 {
     /*===========================================================================*
-     * Sliding surface calculation
+     * Controller evaluation
      *===========================================================================*/
-    double error   = setpoint - y_;
-    double d_error = (error - prev_error_) / dt;
-    double s       = error + (lambda_ * d_error);
-    prev_error_    = error;
-
-    /*===========================================================================*
-     * Sliding Mode Control law
-     *===========================================================================*/
-    double u = kp_ * (s > 0.0 ? 1.0 : -1.0);
+    double measurement = y_; // Current plant output is the measurement for the controller
+    double u = controller_.compute(setpoint, measurement, dt);
 
     /*===========================================================================*
      * Plant update
      *===========================================================================*/
     y_ = plant_->update(u, dt);
+
     return y_;
 }

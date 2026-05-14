@@ -31,6 +31,7 @@ SRC_DIRS  = src utils \
 			src/controller \
 			src/controller/pid \
 			src/controller/fuzzy \
+			src/controller/smc \
 			src/simulation \
 			src/logger \
 			src/visualization

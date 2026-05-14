@@ -110,6 +110,8 @@ int main(int argc, char *argv[])
     double dt = 0.01;
     double simulation_time = 5.0;
     // double setpoint = 1.0;
+    double output_min = 0.0;    // Minimum control output (e.g. no braking)
+    double output_max = 10.0;   // Maximum control output (e.g. full braking)
 
     /*===========================================================================*
      * Gnuplot setup
@@ -182,8 +184,7 @@ int main(int argc, char *argv[])
     double kp = 10.0;
     double ki = 3.0;
     double kd = 0.8;
-    double output_min = 0.0;    // Minimum control output (e.g. no braking)
-    double output_max = 10.0;   // Maximum control output (e.g. full braking)
+
     double y_pid = 0.0;
     // PIDController pid(kp, ki, kd, 0, 10); // PID: Kp=10, Ki=3.0, Kd=0.8, output limits [0, 10]
 
@@ -265,7 +266,7 @@ int main(int argc, char *argv[])
     double lambda = 0.2; // Tuning parameter for sliding surface
     double y_smc = 0.0;
     // Create the SMC simulation instance, which owns the plant and maintains the control state
-    SMCSimulation smc_sim(plant_smc, kp_smc, lambda);
+    SMCSimulation smc_sim(plant_smc, kp_smc, lambda, output_min, output_max);
 
     /*===========================================================================*
      * Buffers (sliding window) for plotting
