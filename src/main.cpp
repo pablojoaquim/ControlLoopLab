@@ -259,6 +259,7 @@ int main(int argc, char *argv[])
     double kp_smc = 5.0; // Gain for sliding mode control
     double lambda = 0.2; // Tuning parameter for sliding surface
     double y_smc = 0.0;
+    // Create the SMC simulation instance, which owns the plant and maintains the control state
     SMCSimulation smc_sim(plant_smc, kp_smc, lambda);
 
     /*===========================================================================*
@@ -331,7 +332,7 @@ int main(int argc, char *argv[])
         y_fuzzy = plant_fuzzy.update(std::max(0.0, u_fuzzy), dt);
 
         /*===========================================================================*
-         * SMC control signal
+         * SMC control signal and update plant
          *===========================================================================*/
         y_smc = smc_sim.update(setpoint, dt);
 

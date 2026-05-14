@@ -3,7 +3,7 @@
 
 /*===========================================================================*/
 /**
- * @file SMCSimulation.h
+ * @file smc_simulation.h
  *
  *------------------------------------------------------------------------------
  * Copyright (c) 2026 - Pablo Joaquim
@@ -55,7 +55,7 @@
 #ifdef __cplusplus
 
 #include <memory>
-#include "../plant/IPlant.h"
+#include "IPlant.h"
 
 /*===========================================================================*
  * Exported Preprocessor #define Constants
