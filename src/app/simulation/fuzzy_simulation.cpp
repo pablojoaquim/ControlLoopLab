@@ -48,7 +48,7 @@ FuzzySimulation::FuzzySimulation(std::shared_ptr<IPlant> plant, double output_mi
     : plant_(std::move(plant)),
       error_("error", -1.5, 1.5),
       d_error_("d_error", -10.0, 10.0),
-      control_("control", -1.0 * output_max, output_max),   // Control output range is symmetric around zero
+      control_("control", output_min, output_max),   // Control output range is symmetric around zero
       engine_(),
       defuzz_(),
       y_(0.0),
@@ -61,39 +61,19 @@ FuzzySimulation::FuzzySimulation(std::shared_ptr<IPlant> plant, double output_mi
     error_.addFuzzySet("Zero",           std::make_shared<TriangularMembershipFunction>(-0.15, 0.0,  0.15));
     error_.addFuzzySet("PositiveSmall",  std::make_shared<TriangularMembershipFunction>( 0.0,  0.3,  0.8));
     error_.addFuzzySet("PositiveBig",    std::make_shared<TriangularMembershipFunction>( 0.5,  1.0,  1.5));
-
-    // Derivative of error: expected range is roughly [-10, 10] based on max rate of change
-    d_error_.addFuzzySet("Negative", std::make_shared<TriangularMembershipFunction>(-10.0, -2.0,  0.0));
-    d_error_.addFuzzySet("Zero",     std::make_shared<TriangularMembershipFunction>(-0.5,  0.0,  0.5));
-    d_error_.addFuzzySet("Positive", std::make_shared<TriangularMembershipFunction>( 0.0,  2.0,  10.0));
-
-    // Brake actuator output universe [-10,10]
-    control_.addFuzzySet("NegativeBig",     std::make_shared<TriangularMembershipFunction>(-10.0, -7.0, -4.0));
-    control_.addFuzzySet("NegativeSmall",   std::make_shared<TriangularMembershipFunction>(-5.0, -2.0, 0.0));
-    control_.addFuzzySet("Zero",            std::make_shared<TriangularMembershipFunction>(-0.5, 0.0, 0.5));
-    control_.addFuzzySet("PositiveSmall",   std::make_shared<TriangularMembershipFunction>( 0.0, 2.0, 5.0));
-    control_.addFuzzySet("PositiveBig",     std::make_shared<TriangularMembershipFunction>( 4.0, 7.0, 10.0));
+    
+    // Brake actuator output universe [0,10]
+    control_.addFuzzySet("Zero",            std::make_shared<TriangularMembershipFunction>( 0.0, 0.05, 0.1));
+    control_.addFuzzySet("PositiveSmall",   std::make_shared<TriangularMembershipFunction>( 0.075, 1.5, 3.0));
+    control_.addFuzzySet("PositiveBig",     std::make_shared<TriangularMembershipFunction>( 2.5, 7.5, 10.0));
 
     // Fuzzy rules based on smooth brake control behavior:
-    engine_.addRule(FuzzyRule({{"error","PositiveBig"},   {"d_error","Negative"}}, {"control","PositiveBig"}));
-    engine_.addRule(FuzzyRule({{"error","PositiveBig"},   {"d_error","Zero"}},     {"control","PositiveBig"}));
-    engine_.addRule(FuzzyRule({{"error","PositiveBig"},   {"d_error","Positive"}}, {"control","PositiveBig"}));
-
-    engine_.addRule(FuzzyRule({{"error","PositiveSmall"}, {"d_error","Negative"}}, {"control","PositiveSmall"}));
-    engine_.addRule(FuzzyRule({{"error","PositiveSmall"}, {"d_error","Zero"}},     {"control","PositiveSmall"}));
-    engine_.addRule(FuzzyRule({{"error","PositiveSmall"}, {"d_error","Positive"}}, {"control","PositiveSmall"}));
-
-    engine_.addRule(FuzzyRule({{"error","Zero"},          {"d_error","Negative"}}, {"control","Zero"}));
-    engine_.addRule(FuzzyRule({{"error","Zero"},          {"d_error","Zero"}},     {"control","Zero"}));
-    engine_.addRule(FuzzyRule({{"error","Zero"},          {"d_error","Positive"}}, {"control","Zero"}));
- 
-    engine_.addRule(FuzzyRule({{"error","NegativeBig"},   {"d_error","Negative"}}, {"control","Zero"}));
-    engine_.addRule(FuzzyRule({{"error","NegativeBig"},   {"d_error","Zero"}},     {"control","Zero"}));
-    engine_.addRule(FuzzyRule({{"error","NegativeBig"},   {"d_error","Positive"}}, {"control","Zero"}));
-
-    engine_.addRule(FuzzyRule({{"error","NegativeSmall"}, {"d_error","Negative"}}, {"control","Zero"}));
-    engine_.addRule(FuzzyRule({{"error","NegativeSmall"}, {"d_error","Zero"}},     {"control","Zero"}));
-    engine_.addRule(FuzzyRule({{"error","NegativeSmall"}, {"d_error","Positive"}}, {"control","Zero"}));
+    engine_.addRule(FuzzyRule({{"error","PositiveBig"}},    {"control","PositiveBig"}));
+    engine_.addRule(FuzzyRule({{"error","PositiveSmall"}},  {"control","PositiveSmall"}));
+    engine_.addRule(FuzzyRule({{"error","Zero"}},           {"control","Zero"}));
+    engine_.addRule(FuzzyRule({{"error","NegativeBig"}},    {"control","Zero"}));
+    engine_.addRule(FuzzyRule({{"error","NegativeSmall"}},  {"control","Zero"}));
+   
 }
 
 /*****************************************************************************
@@ -109,12 +89,9 @@ double FuzzySimulation::update(double setpoint, double dt)
      * Controller evaluation
      *===========================================================================*/
     double error = setpoint - y_; // Compute the error for fuzzification
-    double d_error = (error - prev_error_) / dt;
-    prev_error_ = error;
 
     /* Fuzzify inputs and perform inference to get fuzzy control outputs */
-    auto outputs = engine_.infer({{"error", error_.fuzzify(error)},
-                                  {"d_error", d_error_.fuzzify(d_error)}});
+    auto outputs = engine_.infer({{"error", error_.fuzzify(error)}});
 
     /* Defuzzify the control output to get a crisp control signal */
     double u = defuzz_.defuzzify(outputs["control"], control_);
